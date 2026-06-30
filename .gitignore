@@ -1,19 +1,12 @@
-venv/
-
+# Python
 __pycache__/
-
 *.pyc
+.venv/
 
-.ipynb_checkpoints/
+# Medical datasets
+datasets/raw/*
+datasets/processed/*
 
-.env
-
-.DS_Store
-
-.vscode/
-
-.idea/
-
-*.nii
-
-*.nii.gz
+# Keep folders
+!datasets/raw/.gitkeep
+!datasets/processed/.gitkeep
