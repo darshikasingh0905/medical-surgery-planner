@@ -1,4 +1,6 @@
-import nibabel as nib
+def main():
+    print("Medical Surgery Planner")
 
-scan = nib.load("scans/patient001.nii.gz")
-print(scan)
+
+if __name__ == "__main__":
+    main()
