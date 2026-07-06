@@ -1,7 +1,8 @@
 from pathlib import Path
 
+import matplotlib.pyplot as plt
+
 from src.loaders.nifti_loader import load_nifti
-from src.loaders.metadata import extract_metadata
 
 
 def main():
@@ -9,9 +10,14 @@ def main():
 
     image = load_nifti(scan_path)
 
-    metadata = extract_metadata(image)
+    ct_array = image.get_fdata()
 
-    print(metadata)
+    middle_slice = ct_array[:, :, ct_array.shape[2] // 2]
+
+    plt.imshow(middle_slice, cmap="gray")
+    plt.title("Middle CT Slice")
+    plt.axis("off")
+    plt.show()
 
 
 if __name__ == "__main__":
