@@ -7,6 +7,10 @@ from src.preprocessing.histogram import show_histogram
 from src.preprocessing.filters import apply_gaussian_filter
 from src.preprocessing.thresholding import apply_threshold
 from src.visualization.comparison import compare_images
+from src.preprocessing.morphology import (
+    apply_closing,
+    keep_largest_component,
+)
 
 
 def main():
@@ -28,6 +32,10 @@ def main():
         filtered_ct,
         threshold=0.20,
     )
+    
+    closed_ct = apply_closing(binary_ct)
+    
+    largest_ct = keep_largest_component(closed_ct)
 
     # Middle Slice
     slice_index = ct_array.shape[2] // 2
@@ -37,6 +45,8 @@ def main():
         normalized_ct,
         filtered_ct,
         binary_ct,
+        closed_ct,
+        largest_ct,
         slice_index,
     )
 

@@ -6,25 +6,41 @@ def compare_images(
     original: np.ndarray,
     filtered: np.ndarray,
     binary: np.ndarray,
+    closed: np.ndarray,
+    largest: np.ndarray,
     slice_index: int,
 ) -> None:
     """
-    Display original, filtered, and thresholded CT slices.
+    Display preprocessing stages side by side.
     """
 
-    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    fig, axes = plt.subplots(1, 5, figsize=(24, 6))
 
-    axes[0].imshow(original[:, :, slice_index], cmap="gray")
-    axes[0].set_title("Original")
-    axes[0].axis("off")
+    images = [
+        original,
+        filtered,
+        binary,
+        closed,
+        largest,
+    ]
 
-    axes[1].imshow(filtered[:, :, slice_index], cmap="gray")
-    axes[1].set_title("Gaussian Filter")
-    axes[1].axis("off")
+    titles = [
+        "Original",
+        "Gaussian",
+        "Threshold",
+        "Closing",
+        "Largest Component",
+    ]
 
-    axes[2].imshow(binary[:, :, slice_index], cmap="gray")
-    axes[2].set_title("Thresholded")
-    axes[2].axis("off")
+    for ax, image, title in zip(axes, images, titles):
+
+        ax.imshow(
+            image[:, :, slice_index],
+            cmap="gray",
+        )
+
+        ax.set_title(title)
+        ax.axis("off")
 
     plt.tight_layout()
     plt.show()
