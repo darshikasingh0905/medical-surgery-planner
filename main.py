@@ -11,6 +11,7 @@ from src.preprocessing.morphology import (
     apply_closing,
     keep_largest_component,
 )
+from src.preprocessing.edges import apply_sobel_filter
 
 
 def main():
@@ -36,6 +37,10 @@ def main():
     closed_ct = apply_closing(binary_ct)
     
     largest_ct = keep_largest_component(closed_ct)
+    
+    edge_ct = apply_sobel_filter(
+        largest_ct,
+    )
 
     # Middle Slice
     slice_index = ct_array.shape[2] // 2
@@ -47,6 +52,7 @@ def main():
         binary_ct,
         closed_ct,
         largest_ct,
+        edge_ct,
         slice_index,
     )
 

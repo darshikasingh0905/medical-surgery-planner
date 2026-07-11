@@ -8,13 +8,14 @@ def compare_images(
     binary: np.ndarray,
     closed: np.ndarray,
     largest: np.ndarray,
+    edges: np.ndarray,
     slice_index: int,
 ) -> None:
     """
     Display preprocessing stages side by side.
     """
 
-    fig, axes = plt.subplots(1, 5, figsize=(24, 6))
+    fig, axes = plt.subplots(1, 6, figsize=(28, 6))
 
     images = [
         original,
@@ -22,6 +23,7 @@ def compare_images(
         binary,
         closed,
         largest,
+        edges,
     ]
 
     titles = [
@@ -30,6 +32,7 @@ def compare_images(
         "Threshold",
         "Closing",
         "Largest Component",
+        "Sobel Edges",
     ]
 
     for ax, image, title in zip(axes, images, titles):
