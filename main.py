@@ -1,3 +1,4 @@
+import cv2
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -17,8 +18,13 @@ from src.preprocessing.canny import apply_canny_filter
 from src.preprocessing.contours import (
     find_contours,
     draw_contours,
+    analyze_contours,
+    get_largest_contour,
+    draw_bounding_box,
 )
 from src.visualization.comparison import compare_images
+from src.preprocessing.roi import crop_roi
+from src.utils.image_saver import save_image
 
 
 def main():
@@ -64,11 +70,36 @@ def main():
     contours = find_contours(
         largest_ct[:, :, slice_index],
     )
+    
+    analyze_contours(
+        contours,
+    )
+    
+    largest_contour = get_largest_contour(
+        contours,
+    )
+
+    print("\nLargest Contour")
+
+    print(
+        "Area:",
+        cv2.contourArea(largest_contour),
+    )
 
     # Draw Contours
     contour_image = draw_contours(
         normalized_ct[:, :, slice_index],
         contours,
+    )
+    
+    bounding_box_image = draw_bounding_box(
+        normalized_ct[:, :, slice_index],
+        largest_contour,
+    )
+    
+    roi_image = crop_roi(
+        normalized_ct[:, :, slice_index],
+        largest_contour,
     )
 
     # Compare preprocessing pipeline
@@ -98,6 +129,29 @@ def main():
     plt.title("Detected Contours")
     plt.axis("off")
     plt.show()
+    
+    plt.figure(figsize=(6, 6))
+
+    plt.imshow(
+        bounding_box_image,
+    )
+    plt.title("Bounding Box")
+    plt.axis("off")
+    plt.show()
+    plt.figure(figsize=(6, 6))
+
+    plt.imshow(
+        roi_image,
+        cmap="gray",
+    )
+    plt.title("Cropped ROI")
+    plt.axis("off")
+    plt.show()
+    
+    save_image(
+        roi_image,
+        "outputs/roi/cropped_patient.png",
+    )
 
     # Optional Visualizations
     # show_histogram(normalized_ct)
