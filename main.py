@@ -14,6 +14,10 @@ from src.preprocessing.morphology import (
 )
 from src.preprocessing.edges import apply_sobel_filter
 from src.preprocessing.canny import apply_canny_filter
+from src.preprocessing.contours import (
+    find_contours,
+    draw_contours,
+)
 from src.visualization.comparison import compare_images
 
 
@@ -50,12 +54,22 @@ def main():
 
     # Middle Slice
     slice_index = ct_array.shape[2] // 2
-    
+
     # Canny Edge Detection
     canny_ct = apply_canny_filter(
         largest_ct[:, :, slice_index],
     )
 
+    # Contour Detection
+    contours = find_contours(
+        largest_ct[:, :, slice_index],
+    )
+
+    # Draw Contours
+    contour_image = draw_contours(
+        normalized_ct[:, :, slice_index],
+        contours,
+    )
 
     # Compare preprocessing pipeline
     compare_images(
@@ -68,13 +82,20 @@ def main():
         slice_index,
     )
 
-    # Display Canny result separately
+    # Display Canny Result
     plt.figure(figsize=(6, 6))
     plt.imshow(
         canny_ct,
         cmap="gray",
     )
     plt.title("Canny Edge Detection")
+    plt.axis("off")
+    plt.show()
+
+    # Display Contour Result
+    plt.figure(figsize=(6, 6))
+    plt.imshow(contour_image)
+    plt.title("Detected Contours")
     plt.axis("off")
     plt.show()
 
