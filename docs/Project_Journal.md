@@ -74,17 +74,58 @@ The project now includes a complete preprocessing pipeline capable of producing 
 
 ---
 
-# Milestone 4 – Classical Image Segmentation 🚧
 
-**Status:** In Progress
+# Milestone 4 – Classical Image Segmentation Classical Image Processing & ROI Extraction ✅
 
-### Planned Features
-- Edge Detection
-- Sobel Operator
-- Canny Edge Detection
-- Region Growing
-- Watershed Segmentation
-- Contour Extraction
+## Objectives
+Build a complete classical medical image processing pipeline capable of extracting the patient's region of interest (ROI) from CT scans and preparing the data for future AI-based organ segmentation and surgical planning.
+
+## Achievements
+
+### Edge Detection
+- Implemented Sobel edge detection using SciPy.
+- Detected intensity gradients within CT slices.
+- Visualized anatomical boundaries.
+- Implemented OpenCV Canny edge detection.
+- Applied Canny edge detection on the middle CT slice.
+- Compared Sobel and Canny edge detection results.
+- Observed thinner, cleaner, and more accurate edges using Canny.
+
+### Contour Detection
+- Implemented contour detection using OpenCV `findContours()`.
+- Detected connected anatomical boundaries.
+- Drew contours over the original CT slice for visualization.
+
+### Contour Analysis
+- Calculated the total number of detected contours.
+- Computed contour area for each detected object.
+- Computed contour perimeter for each detected object.
+- Identified the largest contour representing the patient's body.
+
+### ROI Localization
+- Computed the bounding rectangle using `cv2.boundingRect()`.
+- Visualized the patient's Region of Interest (ROI).
+- Cropped the CT image using the detected bounding box.
+- Removed unnecessary background surrounding the patient.
+
+### Image Export
+- Implemented a reusable image saving utility.
+- Automatically saved the extracted ROI into the project output directory.
+
+## Challenges
+- Understood the differences between Sobel and Canny edge detection.
+- Learned that OpenCV Canny operates only on 2D images rather than full 3D CT volumes.
+- Worked with contour hierarchies and largest contour extraction.
+- Understood coordinate-based image cropping using bounding rectangles.
+
+## Key Learnings
+- Difference between edge detection and image segmentation.
+- Importance of contour analysis in medical image processing.
+- ROI extraction reduces unnecessary computation before AI segmentation.
+- Classical computer vision techniques provide strong preprocessing for deep learning models.
+
+## Outcome
+The project now includes a complete classical image processing pipeline capable of detecting anatomical boundaries, extracting the patient's body, localizing the Region of Interest (ROI), and preparing medical images for future AI-based organ segmentation.
 
 ---
 

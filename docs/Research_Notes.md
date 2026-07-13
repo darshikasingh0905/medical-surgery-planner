@@ -122,3 +122,40 @@ Identifies separate connected objects in a binary image.
 Keeps only the largest connected object while removing small isolated regions.
 
 Commonly used to remove segmentation noise before further processing.
+
+## Sobel Edge Detection
+- Detects image intensity gradients.
+- Produces thicker edges.
+- Useful for identifying anatomical boundaries.
+- Sensitive to image noise.
+
+## Canny Edge Detection
+- Multi-stage edge detection algorithm.
+- Produces thin and well-localized edges.
+- Includes Gaussian smoothing, non-maximum suppression, and hysteresis thresholding.
+- More robust than Sobel for medical image preprocessing.
+
+## Contour Detection
+- Uses OpenCV's `findContours()` to identify connected boundaries.
+- Represents anatomical structures as connected curves.
+- Enables quantitative measurements such as area and perimeter.
+
+## Contour Analysis
+- Measured contour area and perimeter.
+- Selected the largest contour corresponding to the patient's body.
+- Demonstrated how contour-based analysis can localize anatomical regions.
+
+## Bounding Box Localization
+- Computed axis-aligned bounding boxes using `cv2.boundingRect()`.
+- Used bounding boxes to localize the patient's Region of Interest (ROI).
+
+## ROI Extraction
+- Cropped CT slices using the bounding box.
+- Reduced unnecessary background.
+- Prepared images for future AI segmentation models.
+
+## Key Takeaways
+- Edge detection highlights boundaries but does not perform segmentation.
+- Contours convert edge pixels into meaningful anatomical objects.
+- ROI extraction reduces computational cost and improves downstream processing.
+- Classical computer vision forms an effective preprocessing stage before deep learning.
