@@ -10,6 +10,8 @@ class DecoderBlock(nn.Module):
 
     Upsampling
         ↓
+    Skip Connection
+        ↓
     CNN Block
     """
 
@@ -28,13 +30,22 @@ class DecoderBlock(nn.Module):
         )
 
         self.conv = CNNBlock(
-            in_channels=out_channels,
+            in_channels=out_channels * 2,
             out_channels=out_channels,
         )
 
-    def forward(self, x):
+    def forward(
+        self,
+        x,
+        skip,
+    ):
 
         x = self.up(x)
+
+        x = torch.cat(
+            [x, skip],
+            dim=1,
+        )
 
         x = self.conv(x)
 
@@ -48,17 +59,28 @@ def main():
         out_channels=512,
     )
 
-    sample = torch.randn(
+    bottleneck_output = torch.randn(
         1,
         1024,
         8,
         8,
     )
 
-    output = decoder(sample)
+    skip_connection = torch.randn(
+        1,
+        512,
+        16,
+        16,
+    )
 
-    print("Input Shape :", sample.shape)
-    print("Output Shape:", output.shape)
+    output = decoder(
+        bottleneck_output,
+        skip_connection,
+    )
+
+    print("Bottleneck Output :", bottleneck_output.shape)
+    print("Skip Connection   :", skip_connection.shape)
+    print("Decoder Output    :", output.shape)
 
 
 if __name__ == "__main__":
