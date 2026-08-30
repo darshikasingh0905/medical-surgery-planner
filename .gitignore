@@ -1,6 +1,7 @@
 # Python
 __pycache__/
 *.pyc
+venv/
 .venv/
 
 # Medical datasets
@@ -11,4 +12,5 @@ datasets/processed/*
 !datasets/raw/.gitkeep
 !datasets/processed/.gitkeep
 
+# Generated outputs
 outputs/
