@@ -1,3 +1,8 @@
 numpy
 matplotlib
 nibabel
+TotalSegmentator
+torch
+torchvision
+torchaudio
+opencv-python

@@ -10,3 +10,5 @@ datasets/processed/*
 # Keep folders
 !datasets/raw/.gitkeep
 !datasets/processed/.gitkeep
+
+outputs/
