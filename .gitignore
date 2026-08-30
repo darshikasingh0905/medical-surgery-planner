@@ -1,8 +1,8 @@
 # Python
 __pycache__/
 *.pyc
-venv/
 .venv/
+venv/
 
 # Medical datasets
 datasets/raw/*
