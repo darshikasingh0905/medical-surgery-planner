@@ -6,3 +6,5 @@ torch
 torchvision
 torchaudio
 opencv-python
+pyvista
+vtk
