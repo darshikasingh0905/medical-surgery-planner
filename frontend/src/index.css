@@ -1,0 +1,187 @@
+:root {
+  --bg-color: #f5f7fa;
+  --panel-bg: #ffffff;
+  --text-main: #333333;
+  --text-light: #666666;
+  --border-color: #e0e6ed;
+  --accent-color: #007bff;
+  --accent-hover: #0056b3;
+  --shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  line-height: 1.6;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Header */
+.app-header {
+  background-color: #1a2530;
+  color: #ffffff;
+  padding: 1rem 2rem;
+  box-shadow: var(--shadow);
+  z-index: 10;
+}
+
+.app-header h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+/* Main Layout */
+.app-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Sidebar */
+.app-sidebar {
+  width: 250px;
+  background-color: var(--panel-bg);
+  border-right: 1px solid var(--border-color);
+  padding: 1.5rem;
+  box-shadow: var(--shadow);
+  z-index: 5;
+  overflow-y: auto;
+}
+
+.sidebar h2 {
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.organ-list {
+  list-style: none;
+}
+
+.organ-item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.5rem;
+  border-radius: 6px;
+  background-color: var(--bg-color);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.organ-item:hover {
+  background-color: #eaf1f8;
+}
+
+.organ-item.selected {
+  background-color: #eaf1f8;
+  border-color: var(--accent-color);
+  font-weight: 600;
+}
+
+.organ-color-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+.organ-name {
+  flex: 1;
+}
+
+.visibility-toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.2rem;
+  padding: 0 0.2rem;
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+}
+
+.visibility-toggle:hover {
+  opacity: 1;
+}
+
+/* 3D Viewer Area */
+.app-main {
+  flex: 1;
+  position: relative;
+  background-color: #1a1a1a;
+}
+
+.viewer-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* Footer (Info Panel) */
+.app-footer {
+  background-color: var(--panel-bg);
+  border-top: 1px solid var(--border-color);
+  padding: 1rem 2rem;
+  height: 120px;
+  box-shadow: var(--shadow);
+  z-index: 5;
+}
+
+.info-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+}
+
+.info-panel.empty {
+  color: var(--text-light);
+  font-style: italic;
+  align-items: center;
+}
+
+.info-panel h2 {
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  color: var(--text-light);
+  margin-bottom: 0.5rem;
+}
+
+.info-content {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+
+.info-content h3 {
+  font-size: 1.2rem;
+  margin: 0;
+}
+
+.info-content p {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.info-content .note {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--text-light);
+}
