@@ -6,17 +6,28 @@ import { useLoader } from '@react-three/fiber';
 import * as THREE from 'three';
 import { ORGAN_DATA } from './data';
 
-const OrganMesh = ({ organId, visible }) => {
+/**
+ * OrganMesh — Renders a single organ OBJ mesh from a dynamic URL.
+ *
+ * Props:
+ *   organId  {string}  — key in ORGAN_DATA (used for color)
+ *   url      {string}  — full URL to the .obj file (from getMeshUrl or static)
+ *   visible  {boolean} — controls Three.js mesh visibility
+ *
+ * Graceful degradation: if the mesh URL returns a 404 or fails to load,
+ * the error is caught by the per-organ ErrorBoundary and that organ is
+ * simply not rendered — the rest of the scene continues to function.
+ */
+const OrganMesh = ({ organId, url, visible }) => {
   const organ = ORGAN_DATA[organId];
-  const obj = useLoader(OBJLoader, organ.file);
-  
-  // Create material and clone the object so we don't mutate the cached one
+  const obj = useLoader(OBJLoader, url);
+
   const geometry = useMemo(() => {
     let geo;
     obj.traverse((child) => {
       if (child.isMesh) {
         geo = child.geometry;
-        // Compute vertex normals for smooth shading
+        // Compute vertex normals for smooth shading of Marching Cubes meshes
         geo.computeVertexNormals();
       }
     });
@@ -27,22 +38,64 @@ const OrganMesh = ({ organId, visible }) => {
 
   return (
     <mesh geometry={geometry}>
-      <meshStandardMaterial 
-        color={organ.color} 
-        roughness={0.4} 
-        metalness={0.1} 
-        side={THREE.DoubleSide} 
+      <meshStandardMaterial
+        color={organ.color}
+        roughness={0.4}
+        metalness={0.1}
+        side={THREE.DoubleSide}
       />
     </mesh>
   );
 };
 
-const Viewer3D = ({ visibility }) => {
+/**
+ * OrganErrorBoundary — Per-organ error boundary.
+ * If an organ's mesh fails to load (404, network error, malformed OBJ),
+ * this boundary swallows the error silently so the rest of the scene remains intact.
+ */
+class OrganErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error) {
+    console.warn(`OrganMesh load failed for ${this.props.organId}:`, error.message);
+  }
+
+  render() {
+    if (this.state.hasError) return null;
+    return this.props.children;
+  }
+}
+
+/**
+ * Viewer3D — 3D anatomical scene using React Three Fiber.
+ *
+ * Props:
+ *   visibility {object} — map of organId → boolean
+ *   meshUrls   {object|null} — map of organId → URL string (from backend)
+ *                              If null, nothing is rendered in the scene.
+ *
+ * Preserved from Day 5:
+ *   - OrbitControls (pan, zoom, rotate)
+ *   - GizmoHelper with axis viewport
+ *   - Ambient + directional + spot lighting
+ *   - Smooth shading via computeVertexNormals
+ *   - DoubleSide material
+ *   - Rotation group correcting medical image coordinate conventions
+ *   - Dark background (#1a1a1a)
+ */
+const Viewer3D = ({ visibility, meshUrls }) => {
   return (
     <div className="viewer-container">
       <Canvas camera={{ position: [0, -300, 300], fov: 50, up: [0, 0, 1] }}>
         <color attach="background" args={['#1a1a1a']} />
-        
+
         <ambientLight intensity={0.5} />
         <directionalLight position={[10, 10, 10]} intensity={1} />
         <directionalLight position={[-10, -10, -10]} intensity={0.5} />
@@ -51,12 +104,14 @@ const Viewer3D = ({ visibility }) => {
         <Suspense fallback={null}>
           <Center>
             <group rotation={[-Math.PI / 2, 0, 0]}>
-              {Object.keys(ORGAN_DATA).map(key => (
-                <OrganMesh 
-                  key={key} 
-                  organId={key} 
-                  visible={visibility[key]} 
-                />
+              {meshUrls && Object.keys(ORGAN_DATA).map(key => (
+                <OrganErrorBoundary key={key} organId={key}>
+                  <OrganMesh
+                    organId={key}
+                    url={meshUrls[key]}
+                    visible={visibility[key]}
+                  />
+                </OrganErrorBoundary>
               ))}
             </group>
           </Center>

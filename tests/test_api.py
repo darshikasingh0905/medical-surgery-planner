@@ -125,3 +125,47 @@ def test_get_case_mesh_success(tmp_path, monkeypatch):
     response = client.get(f"/api/cases/{case_id}/meshes/liver")
     assert response.status_code == 200
     assert response.text.strip() == "v 0 0 0"
+
+
+# --- Regression test for NumPy JSON serialization ---
+def test_numpy_serialization():
+    """
+    Regression test: measurement engine returns NumPy types (float32, float64,
+    int64, ndarray). Ensure sanitize_for_json converts them all to native
+    Python types so json.dump does not crash.
+    """
+    import json
+    import numpy as np
+    from src.api.utils.serialization import sanitize_for_json
+
+    raw = {
+        "foreground_voxels": np.int64(753016),
+        "voxel_spacing": np.array([1.5, 1.5, 1.5], dtype=np.float32),
+        "voxel_volume": np.float32(3.375),
+        "volume_mm3": np.float64(2541679.0),
+        "volume_cm3": np.float64(2541.679),
+        "is_manifold": np.bool_(True),
+        "bounds": (np.float64(10.0), np.float64(200.0),
+                   np.float64(10.0), np.float64(150.0),
+                   np.float64(10.0), np.float64(300.0)),
+        "nested": {
+            "x_mm": np.float32(190.0),
+            "y_mm": np.float32(140.0),
+        }
+    }
+
+    sanitized = sanitize_for_json(raw)
+
+    # Must not raise
+    serialized = json.dumps(sanitized)
+    reloaded = json.loads(serialized)
+
+    # Types must be plain Python, not NumPy
+    assert type(reloaded["foreground_voxels"]) is int
+    assert type(reloaded["voxel_volume"]) is float
+    assert type(reloaded["volume_mm3"]) is float
+    assert type(reloaded["is_manifold"]) is bool
+    assert isinstance(reloaded["voxel_spacing"], list)
+    assert all(type(v) is float for v in reloaded["voxel_spacing"])
+    assert isinstance(reloaded["bounds"], list)
+    assert type(reloaded["nested"]["x_mm"]) is float

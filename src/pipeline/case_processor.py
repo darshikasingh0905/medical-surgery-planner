@@ -2,6 +2,8 @@ import os
 import json
 from pathlib import Path
 
+from src.api.utils.serialization import sanitize_for_json
+
 from src.api.utils.case_manager import get_case_path, update_case_status
 from src.segmentation.ai_segmenter import run_segmentation
 from src.mesh.mesh_generator import process_organ
@@ -84,9 +86,10 @@ def process_case_background(case_id: str):
                     
             measurements_results[organ] = organ_results
             
-        # Save measurement results
+        # Save measurement results (sanitize NumPy types for JSON compatibility)
+        sanitized_results = sanitize_for_json(measurements_results)
         with open(measurements_dir / "results.json", "w") as f:
-            json.dump(measurements_results, f, indent=4)
+            json.dump(sanitized_results, f, indent=4)
             
         # Update case status
         update_case_status(case_id, status="completed", results=results_payload)
