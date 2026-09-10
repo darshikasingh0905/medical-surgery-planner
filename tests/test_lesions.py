@@ -1,10 +1,11 @@
 """
 tests/test_lesions.py
 
-Unit tests for Day 9: Renal Lesion Pipeline Foundation.
+Unit tests for Day 9 & Day 10: Renal Lesion Pipeline Foundation and Model Verification.
 Verifies ROI extraction, physical margin calculations, boundary clamping,
-intensity preprocessing, model abstraction error handling, connected-component
-postprocessing, and original-space coordinate re-embedding.
+intensity preprocessing, model abstraction error handling, checkpoint loading,
+TorchScript model execution, connected-component postprocessing,
+and original-space coordinate re-embedding.
 
 NOTE: All test volumes use synthetic geometric test fixtures created solely
 for deterministic software unit testing. None of these tests imply clinical validation.
@@ -12,9 +13,11 @@ for deterministic software unit testing. None of these tests imply clinical vali
 
 from pathlib import Path
 import json
+import os
 import pytest
 import numpy as np
 import nibabel as nib
+import torch
 
 from src.lesions.roi_extractor import extract_kidney_roi, save_roi_package
 from src.lesions.lesion_inference import (
@@ -192,6 +195,81 @@ def test_inference_engine_unconfigured_safety():
 
     with pytest.raises(RuntimeError, match="Validated lesion model weights are not configured"):
         engine.predict(np.zeros((10, 10, 10)), {})
+
+
+def test_checkpoint_path_not_found(tmp_path: Path):
+    """Verifies that an unresolvable model_path raises FileNotFoundError upon initialization."""
+    non_existent = tmp_path / "non_existent_weights.pt"
+    config = LesionModelConfig(model_path=non_existent)
+
+    with pytest.raises(FileNotFoundError, match="Model checkpoint not found"):
+        LesionInferenceEngine(config)
+
+
+def test_invalid_checkpoint_loading_failure(tmp_path: Path):
+    """Verifies that a corrupted or non-model file raises a clear RuntimeError."""
+    corrupt_file = tmp_path / "corrupt_model.pt"
+    corrupt_file.write_text("NOT A VALID PYTORCH MODEL")
+    config = LesionModelConfig(model_path=corrupt_file, model_type="torch_script")
+
+    with pytest.raises(RuntimeError, match="Failed to load lesion model"):
+        LesionInferenceEngine(config)
+
+
+def test_env_configuration(monkeypatch, tmp_path: Path):
+    """Verifies that LesionModelConfig correctly reads environment variables."""
+    fake_path = str(tmp_path / "weights.pt")
+    monkeypatch.setenv("LESION_MODEL_PATH", fake_path)
+    monkeypatch.setenv("LESION_MODEL_TYPE", "torch_script")
+    monkeypatch.setenv("LESION_DEVICE", "cpu")
+
+    config = LesionModelConfig.from_env()
+    assert config.model_path == fake_path
+    assert config.model_type == "torch_script"
+    assert config.device == "cpu"
+
+
+def test_torch_script_model_loading_and_execution(tmp_path: Path):
+    """
+    Creates a deterministic TorchScript unit test module in tmp_path,
+    verifies loading, output shape, probability boundaries, and model info.
+    """
+    # Define a minimal 3D test module: outputs 2 classes [Background, Tumor]
+    class Mock3DSegmenter(torch.nn.Module):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            # x is [1, 1, D, H, W]
+            # Output logits [1, 2, D, H, W]
+            bg = -x
+            fg = x - 0.5
+            return torch.cat([bg, fg], dim=1)
+
+    model = Mock3DSegmenter()
+    scripted = torch.jit.script(model)
+    checkpoint_path = tmp_path / "test_module.pt"
+    scripted.save(str(checkpoint_path))
+
+    # Initialize engine
+    config = LesionModelConfig(
+        model_path=checkpoint_path,
+        model_type="torch_script",
+        device="cpu",
+    )
+    engine = LesionInferenceEngine(config)
+
+    assert engine.is_configured
+
+    info = engine.get_model_info()
+    assert info["configured"] is True
+    assert info["model_type"] == "torch_script"
+    assert 1 in info["label_map"]
+
+    # Test prediction on synthetic 3D ROI array
+    ct_roi = np.random.uniform(-100, 150, size=(16, 16, 16)).astype(np.float32)
+    probs = engine.predict(ct_roi)
+
+    assert probs.shape == ct_roi.shape
+    assert np.all(probs >= 0.0)
+    assert np.all(probs <= 1.0)
 
 
 def test_postprocessing_connected_components():
