@@ -14,3 +14,10 @@ datasets/processed/*
 
 # Generated outputs
 outputs/
+
+# Pretrained model weights
+weights/
+*.model
+*.pt
+*.pth
+!weights/.gitkeep
