@@ -1,7 +1,8 @@
 """
 tests/test_lesions.py
 
-Unit tests for Day 9 & Day 10: Renal Lesion Pipeline Foundation and Model Verification.
+Unit tests for Days 9, 10 & 11: Renal Lesion Pipeline Foundation, Model Verification,
+and KiTS21/KiTS23 nnU-Net checkpoint verification.
 Verifies ROI extraction, physical margin calculations, boundary clamping,
 intensity preprocessing, model abstraction error handling, checkpoint loading,
 TorchScript model execution, connected-component postprocessing,
@@ -13,6 +14,7 @@ for deterministic software unit testing. None of these tests imply clinical vali
 
 from pathlib import Path
 import json
+import pickle
 import os
 import pytest
 import numpy as np
@@ -22,8 +24,10 @@ import torch
 from src.lesions.roi_extractor import extract_kidney_roi, save_roi_package
 from src.lesions.lesion_inference import (
     preprocess_ct_roi,
+    preprocess_ct_roi_nnunet_zscore,
     LesionModelConfig,
     LesionInferenceEngine,
+    _build_nnunetv2_network_from_checkpoint,
 )
 from src.lesions.postprocessing import (
     postprocess_lesion_mask,
@@ -345,3 +349,300 @@ def test_create_lesion_metadata():
     assert meta["volume_ml"] == 1.0
     assert meta["centroid_voxel"] == [9.5, 9.5, 9.5]
     assert "disclaimer" in meta
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Day 11 Tests: KiTS21 / KiTS23 Checkpoint Verification & nnUNet Architecture
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_preprocess_ct_roi_nnunet_zscore():
+    """Verifies nnU-Net foreground z-score normalization on CT ROI."""
+    # Test volume with values outside and inside the clip range [-62.0, 310.0]
+    data = np.array([
+        [[-200.0, -62.0], [0.0, 104.94]],
+        [[200.0, 310.0], [500.0, 104.94]],
+    ], dtype=np.float32)
+
+    norm, params = preprocess_ct_roi_nnunet_zscore(
+        data,
+        foreground_mean=104.94,
+        foreground_std=75.30,
+        clip_p005=-62.0,
+        clip_p995=310.0,
+    )
+
+    assert norm.shape == (2, 2, 2)
+    assert norm.dtype == np.float32
+    assert params["normalization"] == "nnunet_ct_zscore"
+    assert params["foreground_mean"] == 104.94
+    assert params["foreground_std"] == 75.30
+
+    # Values at mean should normalize to approximately 0.0
+    # data[0, 1, 1] is 104.94 -> (104.94 - 104.94) / 75.30 = 0.0
+    assert abs(norm[0, 1, 1]) < 1e-4
+
+    # Clipped minimum: -200 is clipped to -62.0
+    expected_min = (-62.0 - 104.94) / 75.30
+    assert abs(norm[0, 0, 0] - expected_min) < 1e-4
+
+    # Clipped maximum: 500 is clipped to 310.0
+    expected_max = (310.0 - 104.94) / 75.30
+    assert abs(norm[1, 1, 0] - expected_max) < 1e-4
+
+
+def test_preprocess_ct_roi_nnunet_zscore_invalid_dimensions():
+    """Verifies ValueError when input ROI is not 3D."""
+    with pytest.raises(ValueError, match="Expected 3D volume array"):
+        preprocess_ct_roi_nnunet_zscore(np.zeros((64, 64), dtype=np.float32))
+
+
+def test_kits21_plans_pkl_inspection():
+    """
+    Verifies that weights/kits21/plans.pkl is loadable and contains the
+    verified KiTS21 dataset intensity properties and class definitions.
+    """
+    plans_path = Path("weights/kits21/plans.pkl")
+    if not plans_path.exists():
+        pytest.skip("weights/kits21/plans.pkl not present on disk")
+
+    with open(plans_path, "rb") as f:
+        plans = pickle.load(f)
+
+    assert isinstance(plans, dict)
+    assert "dataset_properties" in plans
+    props = plans["dataset_properties"]
+
+    # Check intensity properties contain foreground statistics
+    assert "intensityproperties" in props
+    intensity = props["intensityproperties"][0]
+    assert "mean" in intensity
+    assert "sd" in intensity
+    assert "percentile_00_5" in intensity
+    assert "percentile_99_5" in intensity
+
+    # Validate against known KiTS21 foreground values
+    assert abs(float(intensity["mean"]) - 104.94) < 1.0
+    assert abs(float(intensity["sd"]) - 75.30) < 1.0
+    assert abs(float(intensity["percentile_00_5"]) - (-62.0)) < 1.0
+    assert abs(float(intensity["percentile_99_5"]) - 310.0) < 1.0
+
+    # Validate classes: 1: kidney, 2: tumor, 3: cyst
+    assert plans.get("all_classes") == [1, 2, 3]
+
+
+def test_kits21_v1_checkpoint_incompatibility_detection(tmp_path):
+    """
+    Verifies that attempting to load an nnU-Net v1 checkpoint file
+    (such as model_final_checkpoint.model.pkl) with model_type='nnunetv2_checkpoint'
+    raises an explicit error detailing missing nnUNetv2 keys and v1 incompatibility.
+    """
+    ckpt_path = Path("weights/kits21/model_final_checkpoint.model.pkl")
+    if not ckpt_path.exists():
+        pytest.skip("weights/kits21/model_final_checkpoint.model.pkl not present on disk")
+
+    config = LesionModelConfig(
+        model_path=ckpt_path,
+        model_type="nnunetv2_checkpoint",
+    )
+    # Must fail safely and explicitly because this is a v1 checkpoint
+    with pytest.raises(RuntimeError, match="nnUNetv2 checkpoint missing required keys|nnU-Net v1"):
+        LesionInferenceEngine(config)
+
+
+def test_nnunetv2_checkpoint_missing_keys(tmp_path):
+    """Verifies that an incomplete nnUNetv2 checkpoint is rejected safely."""
+    bad_ckpt_path = tmp_path / "bad_nnunet.pth"
+    # Only save init_args without network_weights
+    torch.save({"init_args": {}}, bad_ckpt_path)
+
+    config = LesionModelConfig(
+        model_path=bad_ckpt_path,
+        model_type="nnunetv2_checkpoint",
+    )
+    with pytest.raises(RuntimeError, match="missing required keys"):
+        LesionInferenceEngine(config)
+
+
+def test_nnunetv2_checkpoint_non_dict_corrupted(tmp_path):
+    """Verifies that a corrupted or non-dict checkpoint file raises RuntimeError."""
+    corrupted_path = tmp_path / "corrupted.pth"
+    torch.save([1, 2, 3], corrupted_path)  # list instead of dict
+
+    config = LesionModelConfig(
+        model_path=corrupted_path,
+        model_type="nnunetv2_checkpoint",
+    )
+    with pytest.raises(RuntimeError, match="Expected nnUNetv2 checkpoint to be a dict"):
+        LesionInferenceEngine(config)
+
+
+def test_build_nnunetv2_network_from_synthetic_checkpoint():
+    """
+    Verifies that _build_nnunetv2_network_from_checkpoint correctly instantiates
+    a PlainConvUNet using dynamic_network_architectures and loads weights.
+    """
+    from dynamic_network_architectures.architectures.unet import PlainConvUNet
+    import torch.nn as nn
+
+    # Build minimal PlainConvUNet for testing
+    encoder_stages = [1, 1]
+    decoder_stages = [1]
+    kernel_sizes = [[3, 3, 3], [3, 3, 3]]
+    strides = [[1, 1, 1], [2, 2, 2]]
+
+    ref_model = PlainConvUNet(
+        input_channels=1,
+        n_stages=2,
+        features_per_stage=[8, 16],
+        conv_op=nn.Conv3d,
+        kernel_sizes=kernel_sizes,
+        strides=strides,
+        n_conv_per_stage=encoder_stages,
+        num_classes=2,
+        n_conv_per_stage_decoder=decoder_stages,
+        conv_bias=True,
+        norm_op=nn.InstanceNorm3d,
+        norm_op_kwargs={"eps": 1e-5, "affine": True},
+        dropout_op=None,
+        dropout_op_kwargs=None,
+        nonlin=nn.LeakyReLU,
+        nonlin_kwargs={"inplace": True},
+        deep_supervision=False,
+    )
+
+    synthetic_checkpoint = {
+        "network_weights": ref_model.state_dict(),
+        "init_args": {
+            "configuration": "3d_fullres",
+            "plans": {
+                "configurations": {
+                    "3d_fullres": {
+                        "UNet_class_name": "PlainConvUNet",
+                        "UNet_base_num_features": 8,
+                        "n_conv_per_stage_encoder": encoder_stages,
+                        "n_conv_per_stage_decoder": decoder_stages,
+                        "pool_op_kernel_sizes": strides,
+                        "conv_kernel_sizes": kernel_sizes,
+                        "unet_max_num_features": 32,
+                    }
+                }
+            },
+            "dataset_json": {
+                "labels": {"background": 0, "kidney_tumor": 1}
+            },
+        },
+        "trainer_name": "nnUNetTrainer_KiTS23",
+        "current_epoch": 100,
+    }
+
+    device = torch.device("cpu")
+    built_network = _build_nnunetv2_network_from_checkpoint(synthetic_checkpoint, device)
+
+    assert built_network is not None
+    assert isinstance(built_network, PlainConvUNet)
+    assert not built_network.training  # must be in eval() mode
+
+    # Test forward pass with a small input volume
+    test_input = torch.zeros((1, 1, 16, 16, 16), dtype=torch.float32)
+    with torch.no_grad():
+        out = built_network(test_input)
+
+    assert out.shape == (1, 2, 16, 16, 16)
+
+
+def test_nnunetv2_checkpoint_inference_engine_execution(tmp_path):
+    """
+    Verifies full LesionInferenceEngine loading and prediction workflow
+    with an nnunetv2_checkpoint configuration.
+    """
+    from dynamic_network_architectures.architectures.unet import PlainConvUNet
+    import torch.nn as nn
+
+    encoder_stages = [1, 1]
+    decoder_stages = [1]
+    kernel_sizes = [[3, 3, 3], [3, 3, 3]]
+    strides = [[1, 1, 1], [2, 2, 2]]
+
+    model = PlainConvUNet(
+        input_channels=1,
+        n_stages=2,
+        features_per_stage=[8, 16],
+        conv_op=nn.Conv3d,
+        kernel_sizes=kernel_sizes,
+        strides=strides,
+        n_conv_per_stage=encoder_stages,
+        num_classes=2,
+        n_conv_per_stage_decoder=decoder_stages,
+        conv_bias=True,
+        norm_op=nn.InstanceNorm3d,
+        norm_op_kwargs={"eps": 1e-5, "affine": True},
+        dropout_op=None,
+        dropout_op_kwargs=None,
+        nonlin=nn.LeakyReLU,
+        nonlin_kwargs={"inplace": True},
+        deep_supervision=False,
+    )
+
+    ckpt_path = tmp_path / "valid_nnunetv2.pth"
+    torch.save({
+        "network_weights": model.state_dict(),
+        "init_args": {
+            "configuration": "3d_fullres",
+            "plans": {
+                "configurations": {
+                    "3d_fullres": {
+                        "UNet_class_name": "PlainConvUNet",
+                        "UNet_base_num_features": 8,
+                        "n_conv_per_stage_encoder": encoder_stages,
+                        "n_conv_per_stage_decoder": decoder_stages,
+                        "pool_op_kernel_sizes": strides,
+                        "conv_kernel_sizes": kernel_sizes,
+                        "unet_max_num_features": 32,
+                    }
+                }
+            },
+            "dataset_json": {
+                "labels": {"background": 0, "kidney_tumor": 1}
+            },
+        },
+        "trainer_name": "nnUNetTrainer_KiTS23",
+        "current_epoch": 250,
+    }, ckpt_path)
+
+    config = LesionModelConfig(
+        model_path=ckpt_path,
+        model_type="nnunetv2_checkpoint",
+        num_classes=2,
+    )
+
+    engine = LesionInferenceEngine(config)
+    assert engine.is_loaded
+    assert engine.is_configured
+
+    info = engine.get_model_info()
+    assert info["configured"] is True
+    assert info["model_type"] == "nnunetv2_checkpoint"
+    assert info["checkpoint_metadata"]["trainer_name"] == "nnUNetTrainer_KiTS23"
+    assert info["checkpoint_metadata"]["current_epoch"] == 250
+
+    # Perform inference on an ROI volume (dimensions must be divisible by stride=2)
+    ct_roi = np.zeros((16, 16, 16), dtype=np.float32)
+    prob_map = engine.predict_lesion_probabilities(ct_roi)
+
+    assert prob_map.shape == (16, 16, 16)
+    assert prob_map.dtype == np.float32
+    assert float(np.min(prob_map)) >= 0.0
+    assert float(np.max(prob_map)) <= 1.0
+
+
+def test_unsupported_model_type_rejection(tmp_path):
+    """Verifies that an unknown model_type raises an explicit ValueError."""
+    dummy_file = tmp_path / "model.bin"
+    dummy_file.write_bytes(b"dummy")
+
+    config = LesionModelConfig(
+        model_path=dummy_file,
+        model_type="unsupported_architecture_xyz",
+    )
+    with pytest.raises(RuntimeError, match="Unsupported model_type 'unsupported_architecture_xyz'"):
+        LesionInferenceEngine(config)
