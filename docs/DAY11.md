@@ -114,19 +114,47 @@ A comprehensive test suite was added to `tests/test_lesions.py`:
 | `test_build_nnunetv2_network_from_synthetic_checkpoint` | Tests `PlainConvUNet` instantiation and forward pass | **PASSED** |
 | `test_nnunetv2_checkpoint_inference_engine_execution` | Tests full end-to-end load & inference on 3D ROI | **PASSED** |
 | `test_unsupported_model_type_rejection` | Verifies rejection of unknown model types | **PASSED** |
+| `test_real_kits_checkpoint_inference` | Verifies real checkpoint execution without synthetic fallback | **SKIPPED (Cleanly)** |
 
 ### Test Suite Execution Summary:
-- **Lesion Pipeline Tests (`tests/test_lesions.py`)**: 22 passed in 2.76s.
-- **Whole Repository Tests (`tests/`)**: 37 passed in 3.97s (100% pass rate).
+- **Lesion Pipeline Tests (`tests/test_lesions.py`)**: 22 passed, 1 skipped.
+- **Whole Repository Tests (`tests/`)**: 37 passed, 1 skipped (100% pass rate).
 
 ---
 
-## 7. Next Steps: Day 12 Roadmap
+## 7. REAL CHECKPOINT STATUS
 
-1. **Full 3D Lesion Mesh Extraction**:
-   - Extract marching cubes isosurfaces from lesion probability masks.
-   - Separate renal parenchyma vs renal tumor meshes with distinct colors and opacities.
-2. **Surgical Distance Metrics**:
-   - Calculate minimum 3D Euclidean distances between tumor surface and renal vessels (artery, vein) and renal pelvicalyceal collecting system.
-3. **Interactive 3D UI Visualizer**:
-   - Render multi-organ segmentation with embedded lesion mesh in React Three Fiber / Three.js viewer.
+**BLOCKED — only architecture/synthetic checkpoint verification is complete; a verified trained checkpoint has not yet been successfully executed.**
+
+### Checkpoint Audit Details:
+- **Exact Checkpoint Path**: `weights/kits21/model_final_checkpoint.tmp` (accompanied by `weights/kits21/model_final_checkpoint.model.pkl` and `weights/kits21/plans.pkl`).
+- **Exact Provenance**: KiTS21 challenge baseline (`Task135_KiTS2021`, fold 0, trained by Fabian Isensee / DKFZ using legacy `nnUNetTrainerV2`).
+- **Model Architecture**: 3D Fullres `PlainConvUNet` (nnU-Net v1/v2 architecture with deep supervision disabled during inference).
+- **Label Mapping**:
+  - Label 0: Background
+  - Label 1: Kidney Parenchyma
+  - Label 2: Kidney Tumor (Mass)
+  - Label 3: Kidney Cyst
+- **Preprocessing Requirements**:
+  - Intensity clipping: `[-62.0, 310.0]` HU
+  - Z-Score Normalization: `(x - 104.94) / 75.30`
+- **Inference Result**:
+  - **BLOCKED**: The weights file `weights/kits21/model_final_checkpoint.tmp` is an incomplete/truncated download fragment (120.26 MB) missing its zip central directory (`PK\x05\x06`). PyTorch raises `RuntimeError: PytorchStreamReader failed reading zip archive: failed finding central directory`.
+  - The companion file `weights/kits21/model_final_checkpoint.model.pkl` is a 143 KB trainer configuration header referencing `nnunet.training.network_training.nnUNetTrainerV2` and contains zero parameter weights.
+- **Limitations & Guardrail Compliance**:
+  - In accordance with medical ethics and project safety constraints, no fake or synthetic tumor predictions were substituted.
+  - Day 11 architecture reconstruction and checkpoint infrastructure are verified, but real renal lesion inference remains blocked pending a complete, verified trained checkpoint.
+
+---
+
+## 8. Critical Stop Condition & Day 12 Status
+
+Because there is no complete, verified trained KiTS checkpoint on disk:
+- **Day 12 IS CURRENTLY BLOCKED.**
+- We do **NOT** proceed to Day 12 tumor mesh extraction.
+- We do **NOT** create a tumor mesh from synthetic or randomized outputs.
+- We do **NOT** create surgical distance metrics from unverified output.
+- We do **NOT** claim tumor detection is clinically working.
+
+**Current Official Status**:
+> *Day 11 architecture and checkpoint infrastructure are verified, but real renal lesion inference remains blocked pending a verified trained checkpoint.*
