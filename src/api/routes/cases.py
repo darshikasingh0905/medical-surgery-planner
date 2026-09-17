@@ -104,10 +104,13 @@ async def get_case_mesh(case_id: str, organ: str):
     """
     Serve a generated 3D mesh (.obj) for a specific case and organ.
     """
-    ALLOWED_ORGANS = {'liver', 'heart', 'aorta', 'kidney_left'}
+    ALLOWED_ORGANS = {
+        'liver', 'heart', 'aorta', 'kidney_left', 'kidney_right',
+        'cyst_left', 'cyst_right', 'tumor_left', 'tumor_right'
+    }
     
     if organ not in ALLOWED_ORGANS:
-        raise HTTPException(status_code=400, detail=f"Invalid organ. Allowed: {', '.join(ALLOWED_ORGANS)}")
+        raise HTTPException(status_code=400, detail=f"Invalid organ. Allowed: {', '.join(sorted(ALLOWED_ORGANS))}")
         
     if not case_exists(case_id):
         raise HTTPException(status_code=404, detail="Case not found")

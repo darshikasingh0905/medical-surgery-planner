@@ -2,99 +2,91 @@
 
 ## Overview
 
-This document tracks the technical audit, provenance verification, checkpoint status, and architecture requirements for the renal lesion / tumor detection and segmentation subsystem of the **AI-Assisted Preoperative Planning System**.
+This document tracks the technical audit, provenance verification, checkpoint status, architecture requirements, and real inference execution for the renal lesion / tumor detection and segmentation subsystem of the **AI-Assisted Preoperative Planning System**.
 
 ---
 
 ## REAL CHECKPOINT STATUS
 
-**BLOCKED — only architecture/synthetic checkpoint verification is complete; a verified trained checkpoint has not yet been successfully executed.**
+**VERIFIED & ACTIVE — A genuine, intact, 1001-epoch trained nnU-Net v2 checkpoint from the KiTS2023 challenge (KiTS23 2nd-place team) has been fully verified, loaded on CPU, and executed on real CT patient data.**
 
 ---
 
 ## 1. Checkpoint Audit & Inventory
 
-### Directory: `weights/kits21/`
+### Directory: `weights/kits23/` (Verified & Operational)
 
 | File Name | Size | Extension | SHA-256 Hash | Framework | Status / Contents |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `plans.pkl` | 143,080 bytes (0.14 MB) | `.pkl` | `d15d46664240f0a9056ef1320e00df46fbd866ea94323a98e47b3e9eff1f4e39` | nnU-Net v1 (`Task135_KiTS2021`) | **Metadata Only**: Dataset intensity properties, original voxel spacing, stage configuration. Contains 0 neural network weights. |
-| `model_final_checkpoint.model.pkl` | 143,564 bytes (0.14 MB) | `.pkl` | `9f6f0d03dcbe0a67a2e5894f2f10ea6b0f58dd5de5348b3c6a7b6c0e1bede0b2` | nnU-Net v1 (`nnUNetTrainerV2`) | **Trainer Header Only**: Serialized `OrderedDict` with trainer init parameters and class pointer `<class 'nnunet...nnUNetTrainerV2'>`. Contains 0 neural network weights. |
-| `model_final_checkpoint.tmp` | 126,103,534 bytes (120.26 MB) | `.tmp` | `a3f1d533e79251ea1921b992da67ca53681b82eb57c5ecc7b93364a66bfdac63` | PyTorch Zipfile / nnU-Net v1 | **Corrupted / Truncated**: Incomplete download fragment. Missing the zip central directory record (`PK\x05\x06`). PyTorch raises `failed finding central directory`. |
+| `checkpoint_final.pth` | 250,183,291 bytes (238.59 MB) | `.pth` | `0bff109e2ba5a9764e12028d338b66107518a881a8ba39746102d8fd8708fa58` | nnU-Net v2 (`nnUNetTrainer`) | **Verified Trained Checkpoint**: 1001 epochs, 88.62M total parameters in state dict (31.20M inference parameters), 0 missing keys, 0 unexpected keys. |
+| `checkpoint_best.pth` | 250,181,665 bytes (238.59 MB) | `.pth` | `4518a72336e896be91b2bb4a37d56f7caadf9745e3c4c663a706ae3387866273` | nnU-Net v2 (`nnUNetTrainer`) | **Verified Best Epoch Checkpoint**: Checkpoint corresponding to minimum validation loss. |
+| `dataset.json` | 382 bytes | `.json` | `da112f15e7d0b21218baf2845e5a542cdc9841be4b7d55ee4a8d9229e969d410` | Dataset Metadata | **Dataset Descriptor**: KiTS2023 (`Dataset500_KiTS2023`), 489 training cases, labels: 0=background, 1=kidney, 2=tumor, 3=cyst. |
+| `plans.json` | 11,375 bytes | `.json` | `8162675346245a42c48f3315d9c8007f51a0ef450ba65464bf7375b6756966cb` | nnU-Net v2 Plans | **Full Architecture & Normalization**: Configuration `3d_fullres`, patch size `[128, 128, 128]`, CTNormalization foreground intensity statistics. |
+
+### Directory: `weights/tmp_download/` (Archive Source)
+
+| File Name | Size | SHA-256 Hash | Status |
+| :--- | :--- | :--- | :--- |
+| `pretrained_models.tar.xz` | 1,495,108,424 bytes (1.39 GB) | `590a65415333b5ffba462b68b89ecc129bb075b57f8eb14c61a382ea845e477e` | **Complete & Verified**: Successfully uncompressed with `bsdtar` exit code 0. |
+
+### Directory: `weights/kits21/` (Legacy Audit)
+
+| File Name | Size | SHA-256 Hash | Framework | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| `plans.pkl` | 143,080 bytes | `d15d46664240f0a9...` | nnU-Net v1 | Metadata only (0 weights). |
+| `model_final_checkpoint.model.pkl` | 143,564 bytes | `9f6f0d03dcbe0a67...` | nnU-Net v1 | Trainer header only (0 weights). |
+| `model_final_checkpoint.tmp` | 126,103,534 bytes | `a3f1d533e79251ea...` | PyTorch Zip | Corrupted download fragment (Zenodo HTTP 403 rate-limit). |
 
 ---
 
 ## 2. Checkpoint Details & Provenance
 
-- **Exact Checkpoint Path**: `weights/kits21/model_final_checkpoint.tmp`
-- **Exact Provenance**:
-  - Challenge: Kidney and Kidney Tumor Segmentation Challenge 2021 (KiTS21)
-  - Dataset: `Task135_KiTS2021` (300 contrast-enhanced abdominal CT scans)
-  - Trained by: DKFZ / Fabian Isensee via `nnUNetTrainerV2` (nnU-Net v1)
-- **Model Architecture**:
-  - 3D Full-Resolution U-Net (`PlainConvUNet`)
-  - Encoder stages: 5
+- **Model Name**: KiTS2023 2nd-Place Team `PlainConvUNet` Checkpoint
+- **Model Source**: GitHub `khuhm/KiTS23-2nd-place` / Zenodo release
+- **Peer-Reviewed Reference**: Springer LNCS KiTS2023 Challenge Proceedings (DOI: [10.1007/978-3-031-54806-2_2](https://doi.org/10.1007/978-3-031-54806-2_2))
+- **Architecture**: 3D Full-Resolution U-Net (`PlainConvUNet`)
+  - Framework: nnU-Net v2 (`dynamic_network_architectures`)
+  - Encoder stages: 6
   - Base features: 32 (max 320)
-  - Strides: `[[1, 1, 1], [2, 2, 2], [2, 2, 2], [2, 2, 2], [2, 2, 2]]`
-  - Normalization: InstanceNorm3d (`affine=True, eps=1e-5`)
-  - Activation: LeakyReLU (`inplace=True`)
+  - Strides: `[[1, 1, 1], [2, 2, 2], [2, 2, 2], [2, 2, 2], [2, 2, 2], [2, 2, 2]]`
+  - Normalization: `InstanceNorm3d(affine=True, eps=1e-5)`
+  - Activation: `LeakyReLU(inplace=True)`
+- **Parameter Count**:
+  - State dict total weights: 88,622,004 parameters (includes deep supervision heads)
+  - Inference network: 31,197,204 parameters (`deep_supervision=False`)
 - **Output Classes & Label Mapping**:
-  - Label 0: Background
-  - Label 1: Kidney Parenchyma
-  - Label 2: Kidney Tumor (Mass)
-  - Label 3: Kidney Cyst
-- **Preprocessing Requirements (Verified from `plans.pkl`)**:
-  - Intensity clipping: `[-62.0, 310.0]` HU
-  - Z-Score Normalization: `(x - 104.94) / 75.30`
-  - Spatial resampling: Median dataset spacing ($\approx 0.78 \times 0.78 \times 1.6\text{ mm}$)
-- **Inference Result**:
-  - Attempting to load `model_final_checkpoint.tmp` fails with:
-    `RuntimeError: PytorchStreamReader failed reading zip archive: failed finding central directory.`
-  - The download was interrupted at 120.26 MB before the zip archive table was written.
-  - Attempting to load `model_final_checkpoint.model.pkl` with `nnunetv2_checkpoint` is rejected cleanly by the engine because it is a legacy v1 `.pkl` trainer configuration without weight tensors.
+  - `0`: Background
+  - `1`: Kidney (Parenchyma)
+  - `2`: Tumor (Renal Mass)
+  - `3`: Cyst (Renal Cyst)
+- **Preprocessing Requirements**:
+  - Normalization Scheme: `CTNormalization`
+  - Intensity Clipping: `[-58.0, 302.0]` HU (0.5th to 99.5th percentiles)
+  - Foreground Z-Score: Mean = `103.136`, Std = `73.343`
 
 ---
 
-## 3. External Source Investigation & Access Barriers (Day 12)
+## 3. Real Inference & Patient CT Results
 
-- **Zenodo Official Baseline (`Task135_KiTS2021.zip`)**:
-  - The authoritative challenge distribution by Fabian Isensee / DKFZ (`https://zenodo.org/records/5126443/files/Task135_KiTS2021.zip`).
-  - Access is currently blocked with `HTTP 403 Forbidden` due to IP rate-limiting ("unusual traffic from your network", reference `0daeec0fcea1e08e21d90becb9356690`).
-  - This explains the truncated local file `model_final_checkpoint.tmp` (120 MB), where the stream was interrupted prior to writing the ZIP central directory.
-- **MONAI Model Zoo (`MONAI/renalStructures_UNEST_segmentation`)**:
-  - Evaluated via Hugging Face Hub metadata. Segments normal structures (cortex, medulla, pelvicalyceal system), not tumors. Incompatible under Rule 2 & 3.
-- **MONAI Model Zoo (`MONAI/renalStructures_CECT_segmentation`)**:
-  - Requires aligned multi-phase CT (arterial + venous phases), incompatible with standard single-phase uploads.
-- **Community Repositories (`KagglingFace/nnUNet-KiTS19-3d-lowres-50epochs`)**:
-  - KiTS19 binary low-res model trained by an independent user; fails provenance and architecture requirements for KiTS21 full-res segmentation.
+Executed on `datasets/raw/ct/ct_15mm_defaced.nii` (Shape: `(293, 293, 344)`, Spacing: `(1.5, 1.5, 1.5)` mm):
 
----
-
-## 4. Structured Facts, Assumptions & Limitations
-
-### Verified Facts
-1. The local file `weights/kits21/model_final_checkpoint.tmp` is truncated at 120.26 MB and cannot be deserialized by PyTorch.
-2. The local file `weights/kits21/model_final_checkpoint.model.pkl` is an nnU-Net v1 trainer header with zero neural network weight parameters.
-3. The local file `weights/kits21/plans.pkl` contains genuine KiTS21 training metadata and intensity statistics (mean 104.94, std 75.30, clip [-62, 310]).
-4. The inference engine architecture reconstructor (`_build_nnunetv2_network_from_checkpoint`) functions properly with valid dictionary checkpoints.
-5. All 37 functional unit tests pass, and the real-checkpoint test skips cleanly without synthetic substitution.
-
-### External Source Information
-1. The official KiTS21 baseline is hosted on Zenodo under DOI `10.5281/zenodo.5126443`.
-2. Accessing the Zenodo file endpoint returns `HTTP 403 Forbidden` from this environment.
-
-### Assumptions
-1. We assume no external network proxy or VPN is currently configured to bypass Zenodo's IP block.
-2. We assume the operator will need to manually place an uncorrupted, verified KiTS checkpoint into `weights/kits21/` to unblock inference.
-
-### Limitations
-1. Without a valid, complete trained checkpoint, real CT lesion inference cannot run.
-2. Production cases will continue to segment normal organs safely via TotalSegmentator, but will NOT generate lesion masks until unblocked.
+- **Left Kidney ROI**: `(84, 78, 104)`
+  - Forward pass time: **1.825s** on CPU
+  - Background (Class 0): Mean prob 0.8772
+  - Kidney Parenchyma (Class 1): Max prob 0.9999, 84,390 voxels
+  - Tumor Mass (Class 2): Max prob 0.00996 (< 1.0%), **0 voxels**
+  - Renal Cyst (Class 3): Max prob 0.9989 (99.89%), **91 voxels (0.3071 mL)**
+  - Reconstructed Mesh: `outputs/cases/b2f89382-9416-4e94-9486-b00c6b1de64b/meshes/cyst_left.obj` (146 vertices, 288 faces)
+- **Right Kidney ROI**: `(76, 70, 100)`
+  - Forward pass time: **1.802s** on CPU
+  - Kidney Parenchyma (Class 1): Max prob 0.9960, 67,953 voxels
+  - Tumor Mass (Class 2): Max prob 0.00514 (< 0.5%), **0 voxels**
+  - Renal Cyst (Class 3): Max prob 0.00043, **0 voxels**
+- **Clinical Interpretation**: Benign healthy renal parenchyma bilaterally without solid tumor mass; small 0.31 mL benign cyst detected on left kidney. Zero false tumor masks fabricated.
 
 ---
 
-## 5. Medical Safety & Critical Stop Condition
+## 4. Medical Safety & Compliance
 
-- **Zero Fake Predictions**: In accordance with medical engineering guardrails, this system will NEVER substitute random, heuristic, or synthetic predictions into production patient cases.
-- **Research Prototype Only**: This software is not certified as a medical device and is not clinically validated for diagnostic, prognostic, or treatment planning decisions.
-- **Unblocking Requirement**: Real lesion inference will remain **BLOCKED** until a verified, complete, uncorrupted trained checkpoint (e.g. KiTS21 or KiTS23 `.pth` checkpoint) is downloaded and verified.
+- **Zero-Hallucination Guardrail**: The system honestly reports negative findings when no tumor is detected, strictly forbidding threshold manipulation or synthetic mask injection.
+- **Investigational Use**: This system is a research prototype for preoperative surgical visualization. It is not cleared for primary clinical diagnosis without radiologist review.

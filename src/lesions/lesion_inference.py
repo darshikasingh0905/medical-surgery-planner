@@ -27,6 +27,7 @@ import os
 import logging
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 logger = logging.getLogger(__name__)
 
@@ -338,6 +339,8 @@ def _build_nnunetv2_network_from_checkpoint(
 
     network = network.to(device)
     network.eval()
+    network.strides = pool_op_kernel_sizes
+    network.labels = labels
     return network
 
 
@@ -480,14 +483,26 @@ class LesionInferenceEngine:
                         "supported by the 'nnunetv2_checkpoint' loader."
                     )
 
+                self._model = _build_nnunetv2_network_from_checkpoint(
+                    raw_checkpoint, self._resolved_device
+                )
+
+                labels = getattr(self._model, "labels", {})
+                if isinstance(labels, dict) and len(labels) > 0:
+                    self._labels = labels
+                    self.config.label_map = {v: k for k, v in labels.items()}
+                    self.config.num_classes = len(labels)
+                else:
+                    self._labels = {}
+
+                self._strides = getattr(self._model, "strides", None)
                 self._checkpoint_metadata = {
                     "trainer_name": raw_checkpoint.get("trainer_name", "unknown"),
                     "current_epoch": raw_checkpoint.get("current_epoch", -1),
                     "configuration": raw_checkpoint.get("init_args", {}).get("configuration", "unknown"),
+                    "dataset_name": raw_checkpoint.get("init_args", {}).get("dataset_json", {}).get("name", "unknown"),
+                    "labels": labels,
                 }
-                self._model = _build_nnunetv2_network_from_checkpoint(
-                    raw_checkpoint, self._resolved_device
-                )
 
             else:
                 raise ValueError(
@@ -537,9 +552,38 @@ class LesionInferenceEngine:
         try:
             # Ensure intensities are normalized if raw HU was passed
             if np.min(ct_roi) < -50 or np.max(ct_roi) > 50:
-                roi_input, _ = preprocess_ct_roi(ct_roi)
+                if self.config.model_type == "nnunetv2_checkpoint":
+                    roi_input, _ = preprocess_ct_roi_nnunet_zscore(
+                        ct_roi,
+                        foreground_mean=103.136,
+                        foreground_std=73.343,
+                        clip_p005=-58.0,
+                        clip_p995=302.0,
+                    )
+                else:
+                    roi_input, _ = preprocess_ct_roi(ct_roi)
             else:
                 roi_input = ct_roi.astype(np.float32)
+
+            d, h, w = roi_input.shape
+
+            # Compute padding to ensure dimensions satisfy network downsampling constraints
+            strides = getattr(self, "_strides", None)
+            pad_needed = False
+            if strides:
+                total_strides = [1, 1, 1]
+                for s in strides:
+                    for i in range(3):
+                        total_strides[i] *= s[i]
+                min_dims = [s * 2 for s in total_strides]
+                target_d = max(min_dims[0], ((d + total_strides[0] - 1) // total_strides[0]) * total_strides[0])
+                target_h = max(min_dims[1], ((h + total_strides[1] - 1) // total_strides[1]) * total_strides[1])
+                target_w = max(min_dims[2], ((w + total_strides[2] - 1) // total_strides[2]) * total_strides[2])
+                pad_d = target_d - d
+                pad_h = target_h - h
+                pad_w = target_w - w
+            else:
+                pad_d, pad_h, pad_w = 0, 0, 0
 
             # Prepare tensor [Batch, Channel, D, H, W]
             tensor_input = (
@@ -549,12 +593,25 @@ class LesionInferenceEngine:
                 .to(self._resolved_device, dtype=torch.float32)
             )
 
+            if pad_d > 0 or pad_h > 0 or pad_w > 0:
+                pad_needed = True
+                pad_val = float(tensor_input.min())
+                tensor_input = F.pad(
+                    tensor_input,
+                    (0, pad_w, 0, pad_h, 0, pad_d),
+                    mode="constant",
+                    value=pad_val,
+                )
+
             with torch.no_grad():
                 output = self._model(tensor_input)
 
-                # Check output shape: expect [1, C, D, H, W] or [1, 1, D, H, W]
+                # Check output shape: expect [1, C, D, H, W]
                 if output.ndim != 5:
                     raise ValueError(f"Model output must be 5D [B, C, D, H, W], got {output.shape}")
+
+                if pad_needed:
+                    output = output[:, :, :d, :h, :w]
 
                 num_out_classes = output.shape[1]
                 if num_out_classes == 1:
@@ -562,8 +619,16 @@ class LesionInferenceEngine:
                     tumor_prob_tensor = probs[0, 0]
                 elif num_out_classes >= 2:
                     probs = torch.softmax(output, dim=1)
-                    # Class index 1 is designated as renal lesion/tumor mass
-                    tumor_prob_tensor = probs[0, 1]
+                    # Determine tumor class index
+                    if hasattr(self, "_labels") and isinstance(self._labels, dict) and "tumor" in self._labels:
+                        tumor_idx = self._labels["tumor"]
+                    elif self.config.label_map and any("tumor" in str(v).lower() for v in self.config.label_map.values()):
+                        tumor_idx = [k for k, v in self.config.label_map.items() if "tumor" in str(v).lower()][0]
+                    elif num_out_classes == 4:
+                        tumor_idx = 2  # KiTS standard: 0: bg, 1: kidney, 2: tumor, 3: cyst
+                    else:
+                        tumor_idx = 1
+                    tumor_prob_tensor = probs[0, tumor_idx]
                 else:
                     raise ValueError(f"Invalid model channel count: {num_out_classes}")
 
@@ -580,6 +645,90 @@ class LesionInferenceEngine:
         except Exception as e:
             logger.error("Error during lesion model forward pass: %s", e)
             raise RuntimeError(f"Lesion inference forward pass failed: {e}") from e
+
+    def predict_all_probabilities(self, ct_roi: np.ndarray, metadata: dict[str, Any] | None = None) -> np.ndarray:
+        """
+        Executes inference and returns probability distributions for all output classes.
+
+        Returns:
+            4D float numpy array [num_classes, D, H, W] of class probabilities.
+        """
+        if not self.is_configured:
+            raise RuntimeError("Validated lesion model weights are not configured.")
+
+        if ct_roi.ndim != 3:
+            raise ValueError(f"Expected 3D volume array for inference, got shape {ct_roi.shape}")
+
+        if np.min(ct_roi) < -50 or np.max(ct_roi) > 50:
+            if self.config.model_type == "nnunetv2_checkpoint":
+                roi_input, _ = preprocess_ct_roi_nnunet_zscore(
+                    ct_roi,
+                    foreground_mean=103.136,
+                    foreground_std=73.343,
+                    clip_p005=-58.0,
+                    clip_p995=302.0,
+                )
+            else:
+                roi_input, _ = preprocess_ct_roi(ct_roi)
+        else:
+            roi_input = ct_roi.astype(np.float32)
+
+        d, h, w = roi_input.shape
+        strides = getattr(self, "_strides", None)
+        pad_needed = False
+        if strides:
+            total_strides = [1, 1, 1]
+            for s in strides:
+                for i in range(3):
+                    total_strides[i] *= s[i]
+            min_dims = [s * 2 for s in total_strides]
+            target_d = max(min_dims[0], ((d + total_strides[0] - 1) // total_strides[0]) * total_strides[0])
+            target_h = max(min_dims[1], ((h + total_strides[1] - 1) // total_strides[1]) * total_strides[1])
+            target_w = max(min_dims[2], ((w + total_strides[2] - 1) // total_strides[2]) * total_strides[2])
+            pad_d = target_d - d
+            pad_h = target_h - h
+            pad_w = target_w - w
+        else:
+            pad_d, pad_h, pad_w = 0, 0, 0
+
+        tensor_input = (
+            torch.from_numpy(roi_input)
+            .unsqueeze(0)
+            .unsqueeze(0)
+            .to(self._resolved_device, dtype=torch.float32)
+        )
+
+        if pad_d > 0 or pad_h > 0 or pad_w > 0:
+            pad_needed = True
+            pad_val = float(tensor_input.min())
+            tensor_input = F.pad(
+                tensor_input,
+                (0, pad_w, 0, pad_h, 0, pad_d),
+                mode="constant",
+                value=pad_val,
+            )
+
+        with torch.no_grad():
+            output = self._model(tensor_input)
+            if pad_needed:
+                output = output[:, :, :d, :h, :w]
+            num_out = output.shape[1]
+            if num_out == 1:
+                p1 = torch.sigmoid(output[0, 0])
+                p0 = 1.0 - p1
+                probs = torch.stack([p0, p1], dim=0)
+            else:
+                probs = torch.softmax(output, dim=1)[0]
+
+        return probs.cpu().numpy()
+
+    def predict_classes(self, ct_roi: np.ndarray, metadata: dict[str, Any] | None = None) -> np.ndarray:
+        """
+        Executes inference and returns discrete segmentation map [D, H, W]
+        using argmax over predicted class channels.
+        """
+        all_probs = self.predict_all_probabilities(ct_roi, metadata)
+        return np.argmax(all_probs, axis=0).astype(np.uint8)
 
     def predict_lesion_probabilities(self, ct_roi: np.ndarray, metadata: dict[str, Any] | None = None) -> np.ndarray:
         """Alias for predict() returning 3D voxel-wise probability map."""

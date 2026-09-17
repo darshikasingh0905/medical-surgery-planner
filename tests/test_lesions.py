@@ -708,3 +708,111 @@ def test_real_kits_checkpoint_inference():
     assert prob_map.dtype == np.float32
     assert float(np.min(prob_map)) >= 0.0
     assert float(np.max(prob_map)) <= 1.0
+
+
+def test_kits23_checkpoint_loading_and_metadata():
+    """
+    Verifies that the KiTS23 3D fullres checkpoint loads successfully,
+    reconstructs 4-class architecture, and extracts dataset labels.
+    """
+    ckpt_path = Path("weights/kits23/checkpoint_final.pth")
+    if not ckpt_path.exists():
+        pytest.skip("weights/kits23/checkpoint_final.pth not found on disk.")
+
+    config = LesionModelConfig(
+        model_path=ckpt_path,
+        model_type="nnunetv2_checkpoint",
+        device="cpu",
+    )
+    engine = LesionInferenceEngine(config)
+    assert engine.is_loaded
+    assert engine.is_configured
+
+    info = engine.get_model_info()
+    assert info["configured"] is True
+    assert info["num_classes"] == 4
+    assert info["label_map"] == {
+        0: "background",
+        1: "kidney",
+        2: "tumor",
+        3: "cyst",
+    }
+    meta = info["checkpoint_metadata"]
+    assert meta["trainer_name"] == "nnUNetTrainer"
+    assert meta["current_epoch"] == 1001
+    assert meta["configuration"] == "3d_fullres"
+
+
+def test_kits23_multiclass_inference_probabilities():
+    """
+    Verifies multiclass probabilities and argmax class predictions using
+    the KiTS23 checkpoint.
+    """
+    ckpt_path = Path("weights/kits23/checkpoint_final.pth")
+    if not ckpt_path.exists():
+        pytest.skip("weights/kits23/checkpoint_final.pth not found on disk.")
+
+    config = LesionModelConfig(
+        model_path=ckpt_path,
+        model_type="nnunetv2_checkpoint",
+        device="cpu",
+    )
+    engine = LesionInferenceEngine(config)
+
+    # Test patch with arbitrary dimensions (auto-padding will handle)
+    test_roi = np.zeros((35, 42, 50), dtype=np.float32)
+    probs = engine.predict_all_probabilities(test_roi)
+
+    assert probs.shape == (4, 35, 42, 50)
+    assert probs.dtype == np.float32
+    assert float(np.min(probs)) >= 0.0
+    assert float(np.max(probs)) <= 1.0
+
+    # Probabilities should sum to 1.0 at every voxel
+    prob_sum = np.sum(probs, axis=0)
+    np.testing.assert_allclose(prob_sum, 1.0, atol=1e-5)
+
+    classes = engine.predict_classes(test_roi)
+    assert classes.shape == (35, 42, 50)
+    assert classes.dtype == np.uint8
+
+
+def test_lesion_physical_volume_and_mesh_reconstruction(tmp_path):
+    """
+    Verifies lesion mask postprocessing, physical volume computation,
+    and 3D Marching Cubes mesh reconstruction with physical voxel spacing.
+    """
+    from src.mesh.mesh_generator import generate_mesh_from_mask, save_mesh_as_obj
+
+    # Create synthetic sphere lesion mask
+    mask = np.zeros((40, 40, 40), dtype=np.uint8)
+    z, y, x = np.ogrid[:40, :40, :40]
+    sphere = ((x - 20) ** 2 + (y - 20) ** 2 + (z - 20) ** 2) <= 10 ** 2
+    mask[sphere] = 1
+
+    voxel_count = int(np.sum(mask))
+    assert voxel_count > 0
+
+    spacing = (1.5, 1.5, 1.5)
+    voxel_vol_ml = (spacing[0] * spacing[1] * spacing[2]) / 1000.0
+    physical_vol_ml = voxel_count * voxel_vol_ml
+
+    # Theoretical volume of sphere radius 10 voxels = 4/3 * pi * 10^3 = ~4188.79 voxels
+    # Physical volume = 4188.79 * 3.375 / 1000 = ~14.13 mL
+    assert 13.0 < physical_vol_ml < 15.5
+
+    verts, faces = generate_mesh_from_mask(mask, spacing)
+    assert len(verts) > 0
+    assert len(faces) > 0
+
+    # Check physical coordinates span ~ [10*1.5, 30*1.5] = [15.0, 45.0] mm
+    min_pt = verts.min(axis=0)
+    max_pt = verts.max(axis=0)
+    extent = max_pt - min_pt
+    np.testing.assert_allclose(extent, 30.0, atol=2.0)
+
+    obj_path = tmp_path / "test_lesion.obj"
+    save_mesh_as_obj(obj_path, verts, faces)
+    assert obj_path.exists()
+    assert obj_path.stat().st_size > 0
+
