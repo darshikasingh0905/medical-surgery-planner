@@ -859,3 +859,206 @@ body {
   font-size: 0.8rem;
   color: var(--text-light);
 }
+
+/* ── Day 14: Lesion Sidebar Section ────────────────────────── */
+.sidebar-heading--lesion {
+  margin-top: 1.2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #00c8e0;
+}
+
+.sidebar-lesion-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 229, 255, 0.15);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  color: #00e5ff;
+  border-radius: 10px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.lesion-list {
+  margin-top: 0;
+}
+
+.lesion-item {
+  border: 1.5px solid transparent;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0.5rem 0.75rem;
+  gap: 4px;
+}
+
+.lesion-item:hover {
+  background: rgba(0, 229, 255, 0.07);
+  border-color: rgba(0, 229, 255, 0.2);
+}
+
+.lesion-item.selected {
+  background: rgba(0, 229, 255, 0.1);
+  border-color: rgba(0, 229, 255, 0.4);
+}
+
+.lesion-item > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.lesion-swatch {
+  box-shadow: 0 0 5px rgba(0, 229, 255, 0.4) !important;
+}
+
+.lesion-name {
+  flex: 1;
+  font-size: 0.82rem;
+  text-transform: capitalize;
+}
+
+.lesion-volume-pill {
+  font-size: 0.72rem;
+  color: #00c8d0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.lesion-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.lesion-focus-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.0rem;
+  padding: 0 0.2rem;
+  opacity: 0.6;
+  transition: opacity var(--transition), transform var(--transition);
+}
+
+.lesion-focus-btn:hover {
+  opacity: 1;
+  transform: scale(1.2);
+}
+
+/* ── Day 14: InfoPanel Structure Badges ─────────────────────── */
+.info-structure-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.info-structure-badge--organ {
+  background: rgba(102, 180, 255, 0.12);
+  border: 1px solid rgba(102, 180, 255, 0.25);
+  color: #6eb4ff;
+}
+
+.info-structure-badge--lesion {
+  background: rgba(0, 229, 255, 0.12);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  color: #00e5ff;
+}
+
+/* ── Day 14: Lesion InfoPanel ───────────────────────────────── */
+.info-panel--lesion {
+  border-left: 3px solid rgba(0, 229, 255, 0.4);
+}
+
+.info-measurement-value--unavailable {
+  color: var(--text-muted) !important;
+  font-style: italic;
+}
+
+.info-measurement-value--mono {
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 0.82rem !important;
+}
+
+/* ── Day 14: Spatial Distances Section ──────────────────────── */
+.info-distances-section {
+  border-left: 2px solid rgba(0, 229, 255, 0.2);
+  padding-left: 0.75rem;
+  flex-shrink: 0;
+}
+
+.info-distances-heading {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #00a0b0;
+  margin-bottom: 0.4rem;
+}
+
+.info-distances-grid {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* ── Day 14: Lesion Opacity Slider ──────────────────────────── */
+.lesion-opacity-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.5rem;
+}
+
+.lesion-opacity-label {
+  font-size: 0.72rem;
+  color: #8aa0b8;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.lesion-opacity-slider {
+  width: 80px;
+  height: 4px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: linear-gradient(to right, #00e5ff 0%, rgba(0, 229, 255, 0.15) 100%);
+  border-radius: 4px;
+  cursor: pointer;
+  outline: none;
+}
+
+.lesion-opacity-slider::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #00e5ff;
+  box-shadow: 0 0 6px rgba(0, 229, 255, 0.6);
+  cursor: pointer;
+  transition: transform var(--transition);
+}
+
+.lesion-opacity-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.lesion-opacity-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #00e5ff;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 6px rgba(0, 229, 255, 0.6);
+}

@@ -1,9 +1,9 @@
 # Project Progress Report: AI-Assisted Preoperative Planning System
 
-**Document Version:** 1.1  
-**Last Updated:** September 2026 (Day 13 Completed)  
+**Document Version:** 1.2  
+**Last Updated:** September 2026 (Day 14 Completed)  
 **Target Repository:** `medical-surgery-planner`  
-**Current Status:** Full-Stack Functional Prototype Active | Genuine KiTS2023 Model Active | Real CT Inference Executed | 41/41 Tests Passed
+**Current Status:** Full-Stack Functional Prototype Active | Genuine KiTS2023 Model Active | Real CT Inference Executed | Surgical Spatial Metrics Engine Active | Live 3D Lesion Visualization Active | 49/49 Tests Passed
 
 ---
 
@@ -31,7 +31,10 @@ The system emphasizes **clinical safety, deterministic reproducibility, and stri
 | **Full-Stack End-to-End Integration** | **Completed** | Vite + React $\leftrightarrow$ FastAPI | Live CT upload $\to$ background processing $\to$ 3D visualizer |
 | **Renal Lesion Pipeline (KiTS)** | **Completed** | PyTorch, `dynamic_network_architectures` | Bounding ROI, HU windowing/z-score, inverse coordinate mapping |
 | **Model Weights Verification (KiTS23)** | **Completed & Active** | KiTS23 2nd-place nnU-Net v2 | 1001 epochs, 88.62M params, 4 classes, 0 missing keys |
-| **Automated Verification Suite** | **Active (100% Pass)** | `pytest` (41 tests) | 41 passed, 0 skipped, 0 failed |
+| **Surgical Spatial Metrics Engine** | **Completed** | `scipy.spatial.cKDTree`, `nibabel` | Physical volume, bounding box, centroid, min Euclidean distances (mm) |
+| **Live 3D Lesion Visualization** | **Completed** | React 18, Three.js, R3F | Lesion mesh rendering, opacity slider, focus camera, distances in InfoPanel |
+| **Lesion REST API Endpoints** | **Completed** | FastAPI | `GET /lesions`, `GET /lesions/{id}` with cached + dynamic metrics |
+| **Automated Verification Suite** | **Active (100% Pass)** | `pytest` (49 tests) | 49 passed, 0 skipped, 0 failed |
 
 ---
 
@@ -153,9 +156,8 @@ The system emphasizes **clinical safety, deterministic reproducibility, and stri
     * Architecture: 6-stage `PlainConvUNet` via `dynamic_network_architectures` (0 missing keys, 0 unexpected keys).
     * 4-class label mapping: 0=background, 1=kidney, 2=tumor, 3=cyst.
   * Executed genuine CPU inference on the project's real patient CT scan (`datasets/raw/ct/ct_15mm_defaced.nii`, $293 \times 293 \times 344$):
-    * Sub-2-second CPU inference: Left kidney in 1.825s, Right kidney in 1.802s.
-    * Tumor mass probability $< 1.0\%$ across both kidneys (0 confident tumor voxels; negative finding recorded truthfully with zero synthetic fabrication).
-    * Benign renal cyst detected on left kidney (91 voxels, 0.3071 mL, max probability 99.89%).
+    * No tumor-class voxels exceeded the segmentation threshold (0.50) across either kidney ROI (max probability < 1.0%; zero synthetic fabrication).
+    * Model-predicted cyst-class segmentation in left kidney (91 voxels, 0.3071 mL, max class-3 probability 99.89%, mean 93.7%).
   * Reconstructed physical 3D surface mesh (`cyst_left.obj`, 146 vertices, 288 faces) using Marching Cubes and embedded full-space NIfTI mask (`cyst_left.nii.gz`).
   * Stored provenance audit payload (`provenance.json`).
   * All 41 unit tests in `pytest tests/ -v` pass cleanly (100% passing, 0 skipped, 0 failed).
@@ -239,22 +241,64 @@ python -m pytest tests/ -v
 
 ---
 
-## 6. Active Blockers & Next Immediate Steps
+## 6. Day 14 Milestone — Surgical Spatial Metrics + Live Lesion 3D Visualization
 
-### Active Blockers:
-* **None**: Model checkpoint verified, extracted, loaded, and operating at sub-2-second CPU latency.
+### Completed:
 
-### Next Immediate Steps (Day 14):
-1. **Surgical Clearance Calculation Engine**:
-   - Compute minimum 3D Euclidean distances between detected lesion boundaries (tumor/cyst) and critical vascular structures (aorta, renal artery, renal vein) and renal pelvis.
-2. **Interactive 3D Lesion Visualization**:
-   - Update React/Three.js frontend controls to render detected lesion meshes with clinical shader transparency (translucent amber for tumor, cyan/blue for cyst).
-   - Display real-time surgical clearance metrics directly in the InfoPanel.
+#### Surgical Spatial Measurement Engine (`src/measurements/lesion_measurements.py`)
+- `calculate_lesion_volume`: Physical volume (mm³, cm³, mL) for anisotropic voxels
+- `calculate_lesion_bounding_box`: Physical X/Y/Z extent in mm
+- `calculate_lesion_centroid`: Voxel, physical, and RAS world centroids
+- `calculate_minimum_distance_to_structure`: Exact physical Euclidean distance via `scipy.spatial.cKDTree` in < 0.4 seconds
+- Full comprehensive metrics function with graceful unavailable-structure handling
+
+#### Validated on Real KiTS2023 Inference Output
+| Metric | Value |
+|---|---|
+| Volume | 0.3071 mL |
+| Dimensions | 7.5 × 9.0 × 9.0 mm |
+| Distance to kidney_left capsule | 3.354 mm (inside parenchyma) |
+| Distance to aorta | 54.104 mm |
+| Distance to IVC | 90.337 mm |
+
+#### REST API (`/lesions` endpoints in `src/api/routes/cases.py`)
+- `GET /api/cases/{case_id}/lesions` — returns cached or dynamically computed lesion metrics
+- `GET /api/cases/{case_id}/lesions/{lesion_id}` — returns single lesion (404 if not found)
+
+#### React/Three.js Frontend
+- `LesionMesh` component with LESION_VISUAL_CONFIG (cyan cyst, amber tumor)
+- Lesion panel in Sidebar with visibility toggle and focus 🎯 button
+- Opacity slider in header for lesion mesh transparency
+- Camera animation on focus (60-frame smooth transition to lesion centroid)
+- Host kidney dims to 20% opacity in focus mode
+- InfoPanel extended with lesion spatial distances panel
+
+#### Test Suite Expanded: 49/49 passing
+- `TestLesionMeasurements`: 5 unit tests (volume, bbox, centroid, distance, comprehensive)
+- `test_api.py`: 3 new tests (lesions not-ready, empty, cached results)
+
+### Documentation
+- [`docs/DAY14.md`](DAY14.md) — Full Day 14 implementation report
+- [`docs/SURGICAL_METRICS.md`](SURGICAL_METRICS.md) — Technical reference for spatial metrics
 
 ---
 
-## 7. Medical Safety & Clinical Governance
+## 7. Active Blockers & Next Steps
+
+### Active Blockers:
+* **None**
+
+### Possible Day 15 Directions:
+1. Multi-case comparison dashboard
+2. Axial/coronal/sagittal 2D slice viewer integration in the web frontend
+3. Additional organ segmentation (spleen, pancreas, bladder)
+4. Export/report generation (PDF surgical planning summary)
+
+---
+
+## 8. Medical Safety & Clinical Governance
 
 * **Investigational Use Only**: This software is an engineering prototype designed for research and educational preoperative planning. It is not FDA/CE cleared as a primary diagnostic device.
 * **Human-in-the-Loop Review**: All segmentations, 3D meshes, and quantitative measurements must be verified by a board-certified radiologist or surgical specialist before any operative procedure.
 * **Zero-Hallucination Policy**: The system strictly prohibits synthetic, heuristic, or dummy masks in patient files when neural network inference is unavailable.
+* **Computational Terminology Policy**: All distances are labeled as "computational minimum distance" or "model-derived spatial distance". Terms such as "safe margin", "resectable", or "surgical clearance" are prohibited in all outputs.

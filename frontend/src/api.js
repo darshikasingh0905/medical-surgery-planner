@@ -90,13 +90,25 @@ export async function getCaseResults(caseId) {
 }
 
 /**
+ * Retrieve structured lesion metrics and spatial measurements for a completed case.
+ * Only valid when status === 'completed'.
+ *
+ * @param {string} caseId - The UUID of the case.
+ * @returns {Promise<{ case_id: string, total_lesions: number, lesions: Array, disclaimer: string }>}
+ */
+export async function getCaseLesions(caseId) {
+  return apiFetch(`/cases/${caseId}/lesions`);
+}
+
+/**
  * Build the URL for a generated 3D OBJ mesh.
  * Returns a relative URL string — do NOT fetch this directly; pass it to useLoader / OBJLoader.
  *
  * @param {string} caseId - The UUID of the case.
- * @param {string} organ - One of: liver | heart | aorta | kidney_left
+ * @param {string} organ - One of: liver | heart | aorta | kidney_left | cyst_left
  * @returns {string} Relative URL, e.g. /api/cases/<id>/meshes/liver
  */
 export function getMeshUrl(caseId, organ) {
   return `${BASE_URL}/cases/${caseId}/meshes/${organ}`;
 }
+

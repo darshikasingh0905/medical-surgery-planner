@@ -169,3 +169,86 @@ def test_numpy_serialization():
     assert all(type(v) is float for v in reloaded["voxel_spacing"])
     assert isinstance(reloaded["bounds"], list)
     assert type(reloaded["nested"]["x_mm"]) is float
+
+
+# --- Day 14 Lesion API Endpoints Tests ---
+def test_get_case_lesions_not_ready(tmp_path, monkeypatch):
+    import src.api.utils.case_manager
+    monkeypatch.setattr(src.api.utils.case_manager, "CASES_DIR", tmp_path / "cases")
+
+    case_id = "test-case-uuid"
+    init_case_directory(case_id, "test.nii")
+
+    response = client.get(f"/api/cases/{case_id}/lesions")
+    assert response.status_code == 400
+    assert "Results not ready" in response.json()["detail"]
+
+
+def test_get_case_lesions_empty(tmp_path, monkeypatch):
+    import src.api.utils.case_manager
+    monkeypatch.setattr(src.api.utils.case_manager, "CASES_DIR", tmp_path / "cases")
+
+    case_id = "test-case-uuid"
+    case_path = init_case_directory(case_id, "test.nii")
+
+    with open(case_path / "case.json", "w") as f:
+        json.dump({"case_id": case_id, "filename": "test.nii", "status": "completed"}, f)
+
+    response = client.get(f"/api/cases/{case_id}/lesions")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["case_id"] == case_id
+    assert data["total_lesions"] == 0
+    assert data["lesions"] == []
+
+
+def test_get_case_lesions_with_cached_results(tmp_path, monkeypatch):
+    import src.api.utils.case_manager
+    monkeypatch.setattr(src.api.utils.case_manager, "CASES_DIR", tmp_path / "cases")
+
+    case_id = "test-case-uuid"
+    case_path = init_case_directory(case_id, "test.nii")
+
+    with open(case_path / "case.json", "w") as f:
+        json.dump({"case_id": case_id, "filename": "test.nii", "status": "completed"}, f)
+
+    measurements_dir = case_path / "measurements"
+    cached_payload = {
+        "case_id": case_id,
+        "total_lesions": 1,
+        "lesions": [
+            {
+                "lesion_id": "cyst_left",
+                "class_label": 3,
+                "class_name": "cyst",
+                "computational_interpretation": "model-predicted cyst-class segmentation",
+                "volume_ml": 0.3071,
+                "dimensions_mm": [7.5, 9.0, 9.0],
+                "centroid_mm": [-60.2, 86.5, 180.9],
+                "mesh_available": True,
+                "provenance_reference": "outputs/provenance/kiTS2023_nnunet_run_metadata.json"
+            }
+        ],
+        "disclaimer": "Computational metrics for decision support only."
+    }
+    with open(measurements_dir / "lesions.json", "w") as f:
+        json.dump(cached_payload, f)
+
+    # Test list endpoint
+    response = client.get(f"/api/cases/{case_id}/lesions")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_lesions"] == 1
+    assert data["lesions"][0]["lesion_id"] == "cyst_left"
+
+    # Test single lesion endpoint
+    res_single = client.get(f"/api/cases/{case_id}/lesions/cyst_left")
+    assert res_single.status_code == 200
+    assert res_single.json()["lesion_id"] == "cyst_left"
+    assert res_single.json()["volume_ml"] == 0.3071
+
+    # Test single lesion not found
+    res_404 = client.get(f"/api/cases/{case_id}/lesions/tumor_right")
+    assert res_404.status_code == 404
+    assert "not found" in res_404.json()["detail"]
+

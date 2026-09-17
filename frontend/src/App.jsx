@@ -5,7 +5,7 @@ import InfoPanel from './InfoPanel';
 import UploadPanel from './UploadPanel';
 import StatusPanel from './StatusPanel';
 import { ORGAN_DATA } from './data';
-import { healthCheck, uploadCase, getCaseStatus, getCaseResults, getMeshUrl } from './api';
+import { healthCheck, uploadCase, getCaseStatus, getCaseResults, getCaseLesions, getMeshUrl } from './api';
 import './index.css';
 
 /**
@@ -17,6 +17,11 @@ import './index.css';
  *   'processing' → Backend pipeline is running; polling active
  *   'completed'  → Results ready; 3D viewer shown
  *   'failed'     → Pipeline or upload error
+ *
+ * Day 14 additions:
+ *   - Lesion state: lesions[], lesionVisibility{}, selectedLesion, focusedLesion
+ *   - Organ focus-mode opacity (kidney made translucent when lesion focused)
+ *   - lesionOpacity slider state
  *
  * ⚠️ Medical Safety: This is an AI-assisted preoperative planning prototype.
  *    Outputs require clinical review by a qualified medical professional.
@@ -31,20 +36,28 @@ const initialVisibility = Object.keys(ORGAN_DATA).reduce((acc, key) => {
 
 function App() {
   // ── Application state machine ──────────────────────────────────────────────
-  const [appState, setAppState] = useState('initial'); // initial | uploading | processing | completed | failed
-  const [backendStatus, setBackendStatus] = useState(null); // uploaded | processing | completed | failed
+  const [appState, setAppState] = useState('initial');
+  const [backendStatus, setBackendStatus] = useState(null);
   const [caseId, setCaseId] = useState(null);
-  const [results, setResults] = useState(null);       // organ measurement data from /results
+  const [results, setResults] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const [uploadError, setUploadError] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
 
   // ── Backend health ─────────────────────────────────────────────────────────
-  const [backendAvailable, setBackendAvailable] = useState(null); // null=checking, true, false
+  const [backendAvailable, setBackendAvailable] = useState(null);
 
   // ── Viewer state ───────────────────────────────────────────────────────────
   const [selectedOrgan, setSelectedOrgan] = useState(null);
   const [visibility, setVisibility] = useState(initialVisibility);
+
+  // ── Day 14: Lesion state ───────────────────────────────────────────────────
+  const [lesions, setLesions] = useState([]);                // array of lesion objects
+  const [lesionVisibility, setLesionVisibility] = useState({}); // lesionId → bool
+  const [selectedLesion, setSelectedLesion] = useState(null);
+  const [focusedLesion, setFocusedLesion] = useState(null);   // triggers camera transition
+  const [lesionOpacity, setLesionOpacity] = useState(1.0);
+  const [organOpacities, setOrganOpacities] = useState({});   // overrides for focus mode
 
   // ── Polling ref ────────────────────────────────────────────────────────────
   const pollIntervalRef = useRef(null);
@@ -81,28 +94,41 @@ function App() {
         if (data.status === 'completed') {
           stopPolling();
           setAppState('completed');
-          // Fetch results
+
+          // Fetch organ results
           try {
             const resultData = await getCaseResults(id);
             setResults(resultData.organs || {});
           } catch (err) {
-            // Results fetch failed — viewer still shows meshes, InfoPanel shows "Not available"
             console.error('Results fetch failed:', err);
             setResults({});
+          }
+
+          // Fetch lesion measurements (Day 14)
+          try {
+            const lesionData = await getCaseLesions(id);
+            const lesionList = lesionData.lesions ?? [];
+            setLesions(lesionList);
+            // Initialize all lesions visible
+            const initVis = {};
+            lesionList.forEach(l => { initVis[l.lesion_id] = true; });
+            setLesionVisibility(initVis);
+          } catch (err) {
+            // Lesion data unavailable — not an error, just no lesions shown
+            console.warn('Lesion data not available:', err.message);
+            setLesions([]);
           }
         } else if (data.status === 'failed') {
           stopPolling();
           setAppState('failed');
           setErrorMessage(data.error || 'The backend pipeline encountered an error. Please try again.');
         }
-        // else 'uploaded' | 'processing' → keep polling
       } catch (err) {
-        // Network error during polling — don't crash the app, just log
         console.error('Polling error:', err);
       }
     };
 
-    poll(); // immediate first call
+    poll();
     pollIntervalRef.current = setInterval(poll, POLL_INTERVAL_MS);
   }, [stopPolling]);
 
@@ -136,6 +162,12 @@ function App() {
     setUploadError(null);
     setSelectedOrgan(null);
     setVisibility(initialVisibility);
+    setLesions([]);
+    setLesionVisibility({});
+    setSelectedLesion(null);
+    setFocusedLesion(null);
+    setOrganOpacities({});
+    setLesionOpacity(1.0);
     setAppState('initial');
   }, [stopPolling]);
 
@@ -144,14 +176,58 @@ function App() {
     setVisibility(prev => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
-  // ── Derived mesh URLs (only when completed) ────────────────────────────────
+  // ── Lesion visibility toggle ───────────────────────────────────────────────
+  const handleToggleLesion = useCallback((lesionId) => {
+    setLesionVisibility(prev => ({ ...prev, [lesionId]: !(prev[lesionId] !== false) }));
+  }, []);
+
+  // ── Select organ (clears lesion selection) ─────────────────────────────────
+  const handleSelectOrgan = useCallback((key) => {
+    setSelectedOrgan(key);
+    setSelectedLesion(null);
+    setFocusedLesion(null);
+    setOrganOpacities({});
+  }, []);
+
+  // ── Select lesion (clears organ selection, dims host kidney) ───────────────
+  const handleSelectLesion = useCallback((lesion) => {
+    setSelectedLesion(lesion);
+    setSelectedOrgan(null);
+
+    // Dim the host kidney to reveal the internal lesion
+    const host = lesion.lesion_id.includes('right') ? 'kidney_right' : 'kidney_left';
+    setOrganOpacities({ [host]: 0.25 });
+  }, []);
+
+  // ── Focus camera on lesion ────────────────────────────────────────────────
+  const handleFocusLesion = useCallback((lesion) => {
+    setSelectedLesion(lesion);
+    setSelectedOrgan(null);
+    setFocusedLesion(lesion);
+
+    const host = lesion.lesion_id.includes('right') ? 'kidney_right' : 'kidney_left';
+    setOrganOpacities({ [host]: 0.20 });
+  }, []);
+
+  // ── Camera transition done ────────────────────────────────────────────────
+  const handleFocusDone = useCallback(() => {
+    setFocusedLesion(null); // clear trigger but keep opacity overrides
+  }, []);
+
+  // ── Build mesh URL map (organs + lesions) ─────────────────────────────────
   const meshUrls = React.useMemo(() => {
     if (!caseId || appState !== 'completed') return null;
-    return Object.keys(ORGAN_DATA).reduce((acc, key) => {
-      acc[key] = getMeshUrl(caseId, key);
-      return acc;
-    }, {});
-  }, [caseId, appState]);
+    const urls = {};
+    // Organ meshes
+    Object.keys(ORGAN_DATA).forEach(key => {
+      urls[key] = getMeshUrl(caseId, key);
+    });
+    // Lesion meshes
+    lesions.forEach(l => {
+      urls[l.lesion_id] = getMeshUrl(caseId, l.lesion_id);
+    });
+    return urls;
+  }, [caseId, appState, lesions]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
   const showViewer = appState === 'completed';
@@ -171,7 +247,6 @@ function App() {
           </div>
 
           <div className="app-header-right">
-            {/* Backend status indicator */}
             {backendAvailable === false && (
               <div className="backend-badge backend-badge--offline" role="alert">
                 <span className="backend-dot" />
@@ -185,7 +260,26 @@ function App() {
               </div>
             )}
 
-            {/* Reset button — only visible when not on initial screen */}
+            {/* Lesion opacity slider (only in completed state when lesions present) */}
+            {showViewer && lesions.length > 0 && (
+              <div className="lesion-opacity-control">
+                <label htmlFor="lesion-opacity-slider" className="lesion-opacity-label">
+                  Lesion opacity
+                </label>
+                <input
+                  id="lesion-opacity-slider"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={lesionOpacity}
+                  onChange={(e) => setLesionOpacity(parseFloat(e.target.value))}
+                  className="lesion-opacity-slider"
+                  aria-label="Lesion mesh opacity"
+                />
+              </div>
+            )}
+
             {!showUpload && (
               <button
                 id="upload-new-scan-button"
@@ -231,9 +325,15 @@ function App() {
             <aside className="app-sidebar">
               <Sidebar
                 selectedOrgan={selectedOrgan}
-                onSelectOrgan={setSelectedOrgan}
+                onSelectOrgan={handleSelectOrgan}
                 visibility={visibility}
                 onToggleVisibility={handleToggleVisibility}
+                lesions={lesions}
+                lesionVisibility={lesionVisibility}
+                onToggleLesion={handleToggleLesion}
+                selectedLesion={selectedLesion}
+                onSelectLesion={handleSelectLesion}
+                onFocusLesion={handleFocusLesion}
                 onReset={handleReset}
               />
             </aside>
@@ -242,6 +342,12 @@ function App() {
               <Viewer3D
                 visibility={visibility}
                 meshUrls={meshUrls}
+                lesions={lesions}
+                lesionVisibility={lesionVisibility}
+                lesionOpacity={lesionOpacity}
+                focusedLesion={focusedLesion}
+                organOpacities={organOpacities}
+                onFocusDone={handleFocusDone}
               />
             </main>
           </div>
@@ -250,6 +356,7 @@ function App() {
             <InfoPanel
               selectedOrgan={selectedOrgan}
               organResults={selectedOrgan && results ? results[selectedOrgan] : null}
+              selectedLesion={selectedLesion}
             />
           </footer>
         </>

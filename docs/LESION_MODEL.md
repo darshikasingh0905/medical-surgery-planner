@@ -81,8 +81,7 @@ Executed on `datasets/raw/ct/ct_15mm_defaced.nii` (Shape: `(293, 293, 344)`, Spa
   - Forward pass time: **1.802s** on CPU
   - Kidney Parenchyma (Class 1): Max prob 0.9960, 67,953 voxels
   - Tumor Mass (Class 2): Max prob 0.00514 (< 0.5%), **0 voxels**
-  - Renal Cyst (Class 3): Max prob 0.00043, **0 voxels**
-- **Clinical Interpretation**: Benign healthy renal parenchyma bilaterally without solid tumor mass; small 0.31 mL benign cyst detected on left kidney. Zero false tumor masks fabricated.
+- **Computational Interpretation**: No tumor-class (class 2) voxels exceeded the segmentation threshold (0.50) in either kidney ROI. A 91-voxel (0.3071 mL) cyst-class (class 3) cluster was segmented in the left kidney ROI (mean cluster probability 93.7%, max 99.89%). Zero synthetic or dummy masks were generated.
 
 ---
 

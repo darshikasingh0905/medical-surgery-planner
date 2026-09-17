@@ -64,7 +64,7 @@ Derived from embedded `dataset.json`:
 - **Class 2**: `tumor` (Solid malignant renal mass)
 - **Class 3**: `cyst` (Fluid-filled renal cyst)
 
-*Crucial Engineering Finding*: The model explicitly separates kidney parenchyma (1), solid tumor mass (2), and benign cyst (3). In the inference engine, class 2 is mapped to tumor probabilities and class 3 to cyst probabilities.
+*Crucial Engineering Finding*: The model explicitly separates kidney parenchyma (1), tumor mass (2), and cyst (3). In the inference engine, class 2 is mapped to tumor probabilities and class 3 to cyst probabilities.
 
 ---
 
@@ -107,12 +107,12 @@ Derived from embedded `plans.json` (`configurations['3d_fullres']`):
 
 ---
 
-## 9. Clinical Interpretation & Negative Finding Reporting
+## 9. Computational Interpretation & Model Prediction Reporting
 
 In accordance with strict clinical AI governance:
-- **No Solid Tumor Detected**: Max tumor probability across both kidneys was $< 1.0\%$. Zero tumor voxels exceeded the 0.50 threshold.
+- **No Tumor-Class Segmentation**: No tumor-class (class 2) voxels exceeded the configured segmentation threshold (0.50) in this inference; max tumor probability across both kidneys was $< 1.0\%$.
 - **Zero Fabrication**: No synthetic tumor mask was created or forced into the patient case.
-- **Benign Cyst Finding**: A small $0.31\text{ mL}$ benign cyst was detected on the left kidney ($p > 99.8\%$), accurately reflecting subtle renal morphology without pathological malignancy.
+- **Model-Predicted Cyst-Class Segmentation**: A 91-voxel ($0.3071\text{ mL}$) cluster was segmented with class-3 (cyst) probability $> 99.8\%$ (mean cluster probability $93.7\%$). This represents a computational segmentation of the KiTS23 cyst label, not a clinical or histological confirmation of benign pathology.
 
 ---
 
