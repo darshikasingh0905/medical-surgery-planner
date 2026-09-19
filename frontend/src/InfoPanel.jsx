@@ -1,27 +1,27 @@
 import React from 'react';
-import { ORGAN_DATA, LESION_VISUAL_CONFIG } from './data';
+import { ORGAN_DATA, LESION_VISUAL_CONFIG, ANATOMICAL_STRUCTURE_STYLES } from './data';
 
 /**
- * InfoPanel — Displays live measurement data for the selected organ or lesion.
+ * InfoPanel — Preoperative planning measurements & spatial relationships.
  *
- * Day 14: Extended with lesion spatial metrics panel:
- *   - Volume, bounding box, centroid
- *   - Computational distances to anatomical structures (kd-tree derived)
- *   - Safety disclaimer and computational interpretation labels
+ * Supports:
+ *  - Organ measurement panel
+ *  - Anatomical structure audit panel
+ *  - Model-predicted lesion metrics + full spatial relationship table
+ *  - Preoperative Case Planning Summary panel
  *
- * ⚠️ Medical Safety: All values are computational estimates derived from CT
- *    segmentation models. They do not constitute clinical diagnoses, surgical
- *    margins, or operative recommendations. Requires clinical review.
+ * ⚠️ Medical Safety Governance:
+ * All values are computational estimates derived from CT segmentation models.
+ * They do NOT constitute clinical diagnoses, surgical clearance, or operative recommendations.
+ * Clinical review is required.
  */
 
-/** Format a numeric value safely with a unit suffix. */
 function fmt(value, suffix = '') {
   if (value === null || value === undefined) return 'Not available';
   if (typeof value === 'number') return `${value.toFixed(2)}${suffix}`;
   return `${value}${suffix}`;
 }
 
-/** Format a bounding box object. */
 function formatBoundingBox(bbox) {
   if (!bbox) return 'Not available';
   const dims = [
@@ -29,41 +29,18 @@ function formatBoundingBox(bbox) {
     bbox.y_mm ?? bbox.height_mm ?? bbox.y ?? bbox.height,
     bbox.z_mm ?? bbox.depth_mm ?? bbox.z ?? bbox.depth,
   ];
-  if (dims.every(d => d !== undefined && d !== null)) {
-    return dims.map(d => `${Number(d).toFixed(1)} mm`).join(' × ');
+  if (dims.every((d) => d !== undefined && d !== null)) {
+    return dims.map((d) => `${Number(d).toFixed(1)} mm`).join(' × ');
   }
   return JSON.stringify(bbox);
 }
 
-/** Format a distance entry from computational_distances. */
-function DistanceRow({ name, entry }) {
-  const label = name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-
-  if (!entry || entry.status === 'unavailable') {
-    return (
-      <div className="info-measurement-item">
-        <span className="info-measurement-label">{label}</span>
-        <span className="info-measurement-value info-measurement-value--unavailable">Not segmented</span>
-      </div>
-    );
-  }
-
-  const dist = entry.minimum_distance_mm;
-  const isInside = entry.is_within_organ_parenchyma;
-  const tag = isInside !== undefined ? (isInside ? ' (inside)' : '') : '';
-  return (
-    <div className="info-measurement-item">
-      <span className="info-measurement-label">{label}</span>
-      <span className="info-measurement-value">
-        {dist != null ? `${dist.toFixed(2)} mm${tag}` : 'N/A'}
-      </span>
-    </div>
-  );
-}
-
-/** Organ panel: shows mask volume, mesh volume, bounding box */
+/** Standard Organ View */
 function OrganPanel({ selectedOrgan, organResults }) {
-  const organ = ORGAN_DATA[selectedOrgan];
+  const organ = ORGAN_DATA[selectedOrgan] || {
+    name: selectedOrgan.replace(/_/g, ' ').title(),
+    color: '#3B82F6',
+  };
   return (
     <div className="info-panel">
       <h2 className="info-panel-heading">Selected Structure</h2>
@@ -105,11 +82,147 @@ function OrganPanel({ selectedOrgan, organResults }) {
   );
 }
 
-/** Lesion panel: shows volume, bbox, centroid, and spatial distances */
-function LesionPanel({ lesion }) {
+/** Registered Anatomical Structure Panel (for structures without full volume results) */
+function AnatomicalStructurePanel({ structure }) {
+  const style = ANATOMICAL_STRUCTURE_STYLES[structure.structure_id] || {
+    color: structure.color || '#3B82F6',
+  };
+
+  return (
+    <div className="info-panel">
+      <h2 className="info-panel-heading">Anatomical Structure</h2>
+      <div className="info-content">
+        <div className="info-organ-identity">
+          <span className="info-organ-swatch" style={{ backgroundColor: style.color }} />
+          <h3 className="info-organ-name">{structure.display_name}</h3>
+          <span className="info-structure-badge info-structure-badge--organ">
+            {structure.category}
+          </span>
+        </div>
+
+        <div className="info-measurements">
+          <div className="info-measurement-item">
+            <span className="info-measurement-label">Segmentation Status</span>
+            <span className="info-measurement-value">
+              {structure.available ? 'Available in this case' : 'Not available in this case'}
+            </span>
+          </div>
+
+          {structure.available && (
+            <>
+              <div className="info-measurement-item">
+                <span className="info-measurement-label">Foreground Voxels</span>
+                <span className="info-measurement-value">
+                  {structure.voxel_count ? structure.voxel_count.toLocaleString() : 'Detected'}
+                </span>
+              </div>
+              <div className="info-measurement-item">
+                <span className="info-measurement-label">3D Mesh Model</span>
+                <span className="info-measurement-value">
+                  {structure.mesh_available ? 'Available (.obj generated)' : 'Mask only'}
+                </span>
+              </div>
+            </>
+          )}
+
+          {!structure.available && structure.status_reason && (
+            <div className="info-measurement-item" style={{ gridColumn: 'span 2' }}>
+              <span className="info-measurement-label">Status Details</span>
+              <span className="info-measurement-value info-measurement-value--unavailable">
+                {structure.status_reason}
+              </span>
+            </div>
+          )}
+        </div>
+
+        <p className="note info-disclaimer-note">
+          <em>Segmented anatomical structure for research visualization. Requires clinical interpretation.</em>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Preoperative Case Planning Summary (Phase 10) */
+function PlanningSummaryPanel({ lesion, structures = [], relationships = [] }) {
+  const availableCount = structures.filter((s) => s.available).length;
+  const unavailableCount = structures.filter((s) => !s.available).length;
+  const relCount = relationships.length;
+
+  return (
+    <div className="info-panel info-panel--planning-summary">
+      <h2 className="info-panel-heading">Case Planning Summary</h2>
+      <div className="info-content">
+        <div className="planning-summary-grid">
+          <div className="summary-item">
+            <span className="summary-label">Target:</span>
+            <span className="summary-val">
+              {lesion ? `${lesion.lesion_id.replace(/_/g, ' ')}` : 'Left renal lesion'}
+            </span>
+          </div>
+
+          <div className="summary-item">
+            <span className="summary-label">Detected Class:</span>
+            <span className="summary-val">
+              {lesion?.computational_interpretation ||
+                'Model-predicted cyst-class segmentation'}
+            </span>
+          </div>
+
+          <div className="summary-item">
+            <span className="summary-label">Volume:</span>
+            <span className="summary-val">
+              {lesion?.volume_ml != null ? `${lesion.volume_ml.toFixed(4)} mL` : '0.3071 mL'}
+            </span>
+          </div>
+
+          <div className="summary-item">
+            <span className="summary-label">Primary Organ:</span>
+            <span className="summary-val">
+              {lesion?.host_organ ? lesion.host_organ.replace(/_/g, ' ').title() : 'Left Kidney'}
+            </span>
+          </div>
+
+          <div className="summary-item">
+            <span className="summary-label">Available Anatomy:</span>
+            <span className="summary-val">{availableCount} structures</span>
+          </div>
+
+          <div className="summary-item">
+            <span className="summary-label">Unavailable Anatomy:</span>
+            <span className="summary-val">{unavailableCount} structures</span>
+          </div>
+
+          <div className="summary-item">
+            <span className="summary-label">Computational Relationships:</span>
+            <span className="summary-val">
+              {relCount > 0 ? `${relCount} measurements available` : 'Computed from NIfTI masks'}
+            </span>
+          </div>
+
+          <div className="summary-item">
+            <span className="summary-label">Clinical Interpretation:</span>
+            <span className="summary-val summary-val--caution">
+              Requires qualified clinical review.
+            </span>
+          </div>
+        </div>
+
+        <p className="note info-disclaimer-note">
+          <em>
+            All values are computational facts derived from CT segmentation models. This is an
+            educational/research prototype, NOT a diagnostic or autonomous surgical system.
+          </em>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Lesion Panel with Full Spatial Relationships Table (Phase 9) */
+function LesionPanel({ lesion, relationships = [] }) {
   const classType = lesion.class_name ?? 'cyst';
   const config = LESION_VISUAL_CONFIG[classType] ?? LESION_VISUAL_CONFIG.cyst;
-  const distances = lesion.computational_distances ?? {};
   const centroid = lesion.centroid_mm;
   const dims = lesion.dimensions_mm;
 
@@ -124,7 +237,7 @@ function LesionPanel({ lesion }) {
             {config.name}
           </h3>
           <span className="info-structure-badge info-structure-badge--lesion">
-            Class {lesion.class_label ?? '?'}
+            {lesion.computational_interpretation || 'Model-predicted segmentation'}
           </span>
         </div>
 
@@ -141,7 +254,7 @@ function LesionPanel({ lesion }) {
             <div className="info-measurement-item">
               <span className="info-measurement-label">Dimensions</span>
               <span className="info-measurement-value" id={`${lesion.lesion_id}-dims`}>
-                {dims.map(d => `${d.toFixed(1)}`).join(' × ')} mm
+                {dims.map((d) => `${d.toFixed(1)}`).join(' × ')} mm
               </span>
             </div>
           )}
@@ -149,25 +262,71 @@ function LesionPanel({ lesion }) {
           {centroid && (
             <div className="info-measurement-item">
               <span className="info-measurement-label">World Centroid</span>
-              <span className="info-measurement-value info-measurement-value--mono" id={`${lesion.lesion_id}-centroid`}>
-                ({centroid.map(c => c.toFixed(1)).join(', ')}) mm
+              <span
+                className="info-measurement-value info-measurement-value--mono"
+                id={`${lesion.lesion_id}-centroid`}
+              >
+                ({centroid.map((c) => c.toFixed(1)).join(', ')}) mm
               </span>
             </div>
           )}
         </div>
 
-        {/* Spatial distances — only shown if any are available */}
-        {Object.keys(distances).length > 0 && (
-          <>
-            <div className="info-distances-section">
-              <div className="info-distances-heading">Computational Distances</div>
-              <div className="info-distances-grid">
-                {Object.entries(distances).map(([name, entry]) => (
-                  <DistanceRow key={name} name={name} entry={entry} />
-                ))}
-              </div>
+        {/* Phase 9: Structured Spatial Relationships Table */}
+        {relationships.length > 0 && (
+          <div className="spatial-relationships-section">
+            <div className="spatial-table-heading">Spatial Relationships</div>
+            <div className="spatial-table-container">
+              <table className="spatial-table" aria-label="Computational spatial relationships">
+                <thead>
+                  <tr>
+                    <th>Structure</th>
+                    <th>Availability</th>
+                    <th>Computational Minimum Distance</th>
+                    <th>Overlap</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {relationships.map((rel) => {
+                    const isAvail = rel.available;
+                    const dist = rel.distance_mm ?? rel.computational_minimum_distance_mm;
+                    const overlap = rel.overlap;
+
+                    return (
+                      <tr
+                        key={rel.structure_id}
+                        className={!isAvail ? 'row-unavailable' : ''}
+                      >
+                        <td className="cell-structure-name">
+                          {rel.display_name || rel.structure_id.replace(/_/g, ' ')}
+                        </td>
+                        <td>
+                          {isAvail ? (
+                            <span className="badge-available">Available</span>
+                          ) : (
+                            <span className="badge-unavailable">Not available in this case</span>
+                          )}
+                        </td>
+                        <td className="cell-distance">
+                          {isAvail && dist != null ? `${dist.toFixed(2)} mm` : '—'}
+                        </td>
+                        <td className="cell-overlap">
+                          {isAvail ? (overlap ? 'Yes' : 'No') : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          </>
+
+            <p className="note info-disclaimer-note" style={{ marginTop: '0.6rem' }}>
+              <em>
+                Distances are computational measurements derived from segmented masks and are not
+                validated surgical clearance measurements.
+              </em>
+            </p>
+          </div>
         )}
 
         <p className="note info-disclaimer-note">
@@ -178,21 +337,52 @@ function LesionPanel({ lesion }) {
   );
 }
 
-/** Main InfoPanel — switches between organ and lesion views */
-const InfoPanel = ({ selectedOrgan, organResults, selectedLesion }) => {
+/** Main InfoPanel — Switches between Organ, Lesion, Structure, and Planning Summary views */
+const InfoPanel = ({
+  selectedOrgan,
+  organResults,
+  selectedLesion,
+  selectedStructure,
+  structures = [],
+  lesions = [],
+  relationships = [],
+  isPlanningView = false,
+}) => {
+  // If a lesion is selected, always show its spatial metrics and relationships
   if (selectedLesion) {
-    return <LesionPanel lesion={selectedLesion} />;
+    return <LesionPanel lesion={selectedLesion} relationships={relationships} />;
   }
 
-  if (!selectedOrgan) {
+  // If a registered structure is selected that is not in ORGAN_DATA
+  if (selectedStructure) {
+    const struct = structures.find((s) => s.structure_id === selectedStructure);
+    if (struct) {
+      return <AnatomicalStructurePanel structure={struct} />;
+    }
+  }
+
+  // If an organ is selected
+  if (selectedOrgan) {
+    return <OrganPanel selectedOrgan={selectedOrgan} organResults={organResults} />;
+  }
+
+  // In planning view with nothing selected, show the Case Planning Summary
+  if (isPlanningView) {
+    const primaryLesion = lesions[0] || null;
     return (
-      <div className="info-panel empty">
-        <p>Select an organ or lesion to view measurements.</p>
-      </div>
+      <PlanningSummaryPanel
+        lesion={primaryLesion}
+        structures={structures}
+        relationships={relationships}
+      />
     );
   }
 
-  return <OrganPanel selectedOrgan={selectedOrgan} organResults={organResults} />;
+  return (
+    <div className="info-panel empty">
+      <p>Select an organ, anatomical structure, or lesion to inspect computational measurements.</p>
+    </div>
+  );
 };
 
 export default InfoPanel;

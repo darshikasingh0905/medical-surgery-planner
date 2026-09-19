@@ -42,7 +42,58 @@ export const ORGAN_DATA = {
     defaultOpacity: 0.85,
     focusOpacity: 0.30, // Reduced opacity when inspecting internal lesion
   },
+  kidney_right: {
+    id: 'kidney_right',
+    name: 'Right Kidney',
+    color: '#D48828',
+    roughness: 0.35,
+    metalness: 0.1,
+    defaultOpacity: 0.85,
+  },
+  inferior_vena_cava: {
+    id: 'inferior_vena_cava',
+    name: 'Inferior Vena Cava',
+    color: '#3B82F6',
+    roughness: 0.35,
+    metalness: 0.15,
+    defaultOpacity: 0.9,
+  },
+  adrenal_gland_left: {
+    id: 'adrenal_gland_left',
+    name: 'Left Adrenal Gland',
+    color: '#D97706',
+    roughness: 0.4,
+    metalness: 0.1,
+    defaultOpacity: 0.85,
+  },
+  adrenal_gland_right: {
+    id: 'adrenal_gland_right',
+    name: 'Right Adrenal Gland',
+    color: '#B45309',
+    roughness: 0.4,
+    metalness: 0.1,
+    defaultOpacity: 0.85,
+  },
 };
+
+/**
+ * Visual styling configuration for all registered anatomical structures.
+ */
+export const ANATOMICAL_STRUCTURE_STYLES = {
+  kidney_left: { color: '#E5A93C', category: 'organ' },
+  kidney_right: { color: '#D48828', category: 'organ' },
+  aorta: { color: '#FF6347', category: 'vascular' },
+  inferior_vena_cava: { color: '#3B82F6', category: 'vascular' },
+  renal_artery: { color: '#EF4444', category: 'vascular' },
+  renal_vein: { color: '#60A5FA', category: 'vascular' },
+  renal_pelvis: { color: '#F59E0B', category: 'collecting_system' },
+  ureter: { color: '#FCD34D', category: 'collecting_system' },
+  adrenal_gland_left: { color: '#D97706', category: 'endocrine' },
+  adrenal_gland_right: { color: '#B45309', category: 'endocrine' },
+  liver: { color: '#8B0000', category: 'organ' },
+  heart: { color: '#FA8072', category: 'organ' },
+};
+
 
 /**
  * Visual styling configuration for model-predicted lesions.

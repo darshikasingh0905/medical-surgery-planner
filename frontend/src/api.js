@@ -101,14 +101,36 @@ export async function getCaseLesions(caseId) {
 }
 
 /**
+ * Retrieve anatomical structure audit for a case.
+ *
+ * @param {string} caseId - The UUID of the case.
+ * @returns {Promise<{ case_id: string, structures: Array }>}
+ */
+export async function getCaseStructures(caseId) {
+  return apiFetch(`/cases/${caseId}/structures`);
+}
+
+/**
+ * Retrieve computational spatial relationships between a lesion and anatomical structures.
+ *
+ * @param {string} caseId - The UUID of the case.
+ * @param {string} lesionId - The ID of the lesion (e.g. 'cyst_left').
+ * @returns {Promise<{ case_id: string, lesion_id: string, relationships: Array, summary: object, safety_disclaimer: string }>}
+ */
+export async function getLesionRelationships(caseId, lesionId) {
+  return apiFetch(`/cases/${caseId}/lesions/${lesionId}/relationships`);
+}
+
+/**
  * Build the URL for a generated 3D OBJ mesh.
  * Returns a relative URL string — do NOT fetch this directly; pass it to useLoader / OBJLoader.
  *
  * @param {string} caseId - The UUID of the case.
- * @param {string} organ - One of: liver | heart | aorta | kidney_left | cyst_left
+ * @param {string} organ - Structure or lesion identifier
  * @returns {string} Relative URL, e.g. /api/cases/<id>/meshes/liver
  */
 export function getMeshUrl(caseId, organ) {
   return `${BASE_URL}/cases/${caseId}/meshes/${organ}`;
 }
+
 

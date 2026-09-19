@@ -1,45 +1,69 @@
-import React, { Suspense, useMemo, useRef, useEffect, useState } from 'react';
+import React, { Suspense, useMemo, useRef, useEffect, useState, useCallback } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls, GizmoHelper, GizmoViewport, Center } from '@react-three/drei';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader';
 import { useLoader } from '@react-three/fiber';
 import * as THREE from 'three';
-import { ORGAN_DATA, LESION_VISUAL_CONFIG } from './data';
+import { ORGAN_DATA, LESION_VISUAL_CONFIG, ANATOMICAL_STRUCTURE_STYLES } from './data';
 
 /**
- * OrganMesh — Renders a single organ OBJ mesh with physically-based materials.
- *
- * Improvements (Day 14):
- *  - Per-organ material properties from ORGAN_DATA (roughness, metalness)
- *  - Opacity control support for lesion focus mode
- *  - Smooth PBR shading with environment response
+ * OrganMesh — Renders a single anatomical structure OBJ mesh.
+ * Supports highlighting, transparency overrides, and center calculation.
  */
-const OrganMesh = ({ organId, url, visible, opacity = 1.0 }) => {
-  const organ = ORGAN_DATA[organId];
+const OrganMesh = ({
+  organId,
+  url,
+  visible,
+  opacity = 1.0,
+  highlighted = false,
+  onRegisterCenter,
+}) => {
+  const organStyle = ORGAN_DATA[organId] || ANATOMICAL_STRUCTURE_STYLES[organId] || {
+    color: '#94A3B8',
+    roughness: 0.4,
+    metalness: 0.1,
+  };
+
   const obj = useLoader(OBJLoader, url);
   const meshRef = useRef();
 
   const geometry = useMemo(() => {
-    let geo;
+    let geo = null;
     obj.traverse((child) => {
       if (child.isMesh) {
         geo = child.geometry;
         geo.computeVertexNormals();
+        geo.computeBoundingBox();
       }
     });
     return geo;
   }, [obj]);
 
+  // Report center in NIfTI coordinates so camera focus can target it
+  useEffect(() => {
+    if (geometry && geometry.boundingBox && onRegisterCenter) {
+      const center = new THREE.Vector3();
+      geometry.boundingBox.getCenter(center);
+      // Under group rotation [-PI/2, 0, 0]: local [x, y, z] -> world [x, z, -y]
+      onRegisterCenter(organId, [center.x, center.z, -center.y]);
+    }
+  }, [geometry, organId, onRegisterCenter]);
+
   if (!visible || !geometry) return null;
 
   const isTransparent = opacity < 0.999;
+  const baseColor = organStyle.color || '#94A3B8';
+  const emissiveColor = highlighted ? baseColor : '#000000';
+  const emissiveIntensity = highlighted ? 0.45 : 0.0;
 
   return (
     <mesh ref={meshRef} geometry={geometry}>
       <meshStandardMaterial
-        color={organ.color}
-        roughness={organ.roughness ?? 0.4}
-        metalness={organ.metalness ?? 0.1}
+        color={baseColor}
+        emissive={emissiveColor}
+        emissiveIntensity={emissiveIntensity}
+        roughness={organStyle.roughness ?? 0.4}
+        metalness={organStyle.metalness ?? 0.1}
         side={THREE.DoubleSide}
         transparent={isTransparent}
         opacity={opacity}
@@ -51,16 +75,20 @@ const OrganMesh = ({ organId, url, visible, opacity = 1.0 }) => {
 
 /**
  * LesionMesh — Renders a model-predicted lesion OBJ mesh.
- *
- * Clinical governance: labeled as "model-predicted", never as a confirmed diagnosis.
- * Distinct visual treatment (color, emissive glow, subtle transparency) for clinical differentiation.
  */
-const LesionMesh = ({ lesionId, classType, url, visible, opacity = 1.0, highlighted = false }) => {
+const LesionMesh = ({
+  lesionId,
+  classType,
+  url,
+  visible,
+  opacity = 1.0,
+  highlighted = false,
+}) => {
   const config = LESION_VISUAL_CONFIG[classType] ?? LESION_VISUAL_CONFIG.cyst;
   const obj = useLoader(OBJLoader, url);
 
   const geometry = useMemo(() => {
-    let geo;
+    let geo = null;
     obj.traverse((child) => {
       if (child.isMesh) {
         geo = child.geometry;
@@ -74,7 +102,7 @@ const LesionMesh = ({ lesionId, classType, url, visible, opacity = 1.0, highligh
 
   const effectiveOpacity = opacity;
   const isTransparent = effectiveOpacity < 0.999;
-  const emissiveIntensity = highlighted ? 0.5 : 0.15;
+  const emissiveIntensity = highlighted ? 0.65 : 0.2;
 
   return (
     <mesh geometry={geometry}>
@@ -94,28 +122,32 @@ const LesionMesh = ({ lesionId, classType, url, visible, opacity = 1.0, highligh
 };
 
 /**
- * CameraController — Handles smooth camera transition to lesion focus position.
+ * CameraController — Smoothly animates camera focus to target position or resets to home.
  */
-function CameraController({ focusTarget, onFocusDone }) {
+function CameraController({ focusTarget, resetTrigger, onFocusDone }) {
   const { camera, controls } = useThree();
   const frameRef = useRef(null);
 
+  // Focus on target
   useEffect(() => {
     if (!focusTarget) return;
 
     const target = focusTarget;
     const startPos = camera.position.clone();
-    const destPos = new THREE.Vector3(target[0], target[1] - 80, target[2] + 60);
+    const destPos = new THREE.Vector3(target[0], target[1] - 120, target[2] + 90);
 
     let t = 0;
-    const duration = 60;
+    const duration = 50;
 
     function animate() {
       t++;
       const alpha = Math.min(t / duration, 1);
       const eased = 1 - Math.pow(1 - alpha, 3);
       camera.position.lerpVectors(startPos, destPos, eased);
-      if (controls) controls.target.set(target[0], target[1], target[2]);
+      if (controls) {
+        controls.target.set(target[0], target[1], target[2]);
+        controls.update();
+      }
       if (alpha < 1) {
         frameRef.current = requestAnimationFrame(animate);
       } else if (onFocusDone) {
@@ -129,12 +161,43 @@ function CameraController({ focusTarget, onFocusDone }) {
     };
   }, [focusTarget, camera, controls, onFocusDone]);
 
+  // Reset view to default
+  useEffect(() => {
+    if (!resetTrigger) return;
+
+    const startPos = camera.position.clone();
+    const destPos = new THREE.Vector3(0, -300, 300);
+    const startTarget = controls ? controls.target.clone() : new THREE.Vector3(0, 0, 0);
+    const destTarget = new THREE.Vector3(0, 0, 0);
+
+    let t = 0;
+    const duration = 40;
+
+    function animate() {
+      t++;
+      const alpha = Math.min(t / duration, 1);
+      const eased = 1 - Math.pow(1 - alpha, 3);
+      camera.position.lerpVectors(startPos, destPos, eased);
+      if (controls) {
+        controls.target.lerpVectors(startTarget, destTarget, eased);
+        controls.update();
+      }
+      if (alpha < 1) {
+        frameRef.current = requestAnimationFrame(animate);
+      }
+    }
+
+    frameRef.current = requestAnimationFrame(animate);
+    return () => {
+      if (frameRef.current) cancelAnimationFrame(frameRef.current);
+    };
+  }, [resetTrigger, camera, controls]);
+
   return null;
 }
 
 /**
- * OrganErrorBoundary — Per-organ/lesion error boundary.
- * Silently suppresses 404 or OBJ load errors — the rest of the scene continues.
+ * OrganErrorBoundary — Per-mesh error boundary.
  */
 class OrganErrorBoundary extends React.Component {
   constructor(props) {
@@ -159,53 +222,93 @@ class OrganErrorBoundary extends React.Component {
 /**
  * Viewer3D — 3D anatomical scene using React Three Fiber.
  *
- * Props:
- *   visibility       {object}      — map of organId → boolean
- *   meshUrls         {object|null} — map of organId → URL string (from backend)
- *   lesions          {Array}       — lesion objects from /api/cases/{id}/lesions
- *   lesionVisibility {object}      — map of lesionId → boolean
- *   lesionOpacity    {number}      — global lesion opacity (0–1)
- *   focusedLesion    {object|null} — lesion being focused (triggers camera transition)
- *   organOpacities   {object}      — map of organId → opacity override (for focus mode)
- *   onFocusDone      {function}    — called after camera transition completes
- *
- * Day 14 improvements:
- *   - Per-organ PBR materials (roughness, metalness)
- *   - Lesion rendering with distinct materials
- *   - Lesion focus camera animation
- *   - Improved lighting for depth perception
+ * Supports standard view and preoperative planning view.
+ * Dynamically renders all available anatomical structures and model-predicted lesions.
  */
 const Viewer3D = ({
-  visibility,
-  meshUrls,
+  visibility = {},
+  meshUrls = {},
   lesions = [],
   lesionVisibility = {},
   lesionOpacity = 1.0,
-  focusedLesion = null,
   organOpacities = {},
+  selectedStructure = null,
+  focusedTarget = null,
+  isPlanningView = false,
   onFocusDone,
+  onResetCamera,
 }) => {
-  const [focusTarget, setFocusTarget] = useState(null);
+  const [centers, setCenters] = useState({});
+  const [resetCount, setResetCount] = useState(0);
 
-  useEffect(() => {
-    if (focusedLesion?.centroid_mm) {
-      const [x, y, z] = focusedLesion.centroid_mm;
-      setFocusTarget([x, z, -y]); // NIfTI → Three.js axis conversion (matches -PI/2 rotation group)
-    } else {
-      setFocusTarget(null);
+  const handleRegisterCenter = useCallback((id, centerCoords) => {
+    setCenters((prev) => ({ ...prev, [id]: centerCoords }));
+  }, []);
+
+  // Compute camera target based on focusedTarget (lesion object, structure id, or explicit coordinates)
+  const computedFocusTarget = useMemo(() => {
+    if (!focusedTarget) return null;
+
+    // Direct [x, y, z] coordinates
+    if (Array.isArray(focusedTarget) && focusedTarget.length === 3) {
+      return focusedTarget;
     }
-  }, [focusedLesion]);
+
+    // Lesion with centroid_mm
+    if (focusedTarget.centroid_mm) {
+      const [x, y, z] = focusedTarget.centroid_mm;
+      return [x, z, -y];
+    }
+
+    // Structure ID registered in centers map
+    if (typeof focusedTarget === 'string' && centers[focusedTarget]) {
+      return centers[focusedTarget];
+    }
+
+    return null;
+  }, [focusedTarget, centers]);
+
+  const handleReset = () => {
+    setResetCount((c) => c + 1);
+    if (onResetCamera) onResetCamera();
+  };
+
+  // Collect all mesh keys to render (organs + registered anatomical structures)
+  const allMeshKeys = useMemo(() => {
+    if (!meshUrls) return [];
+    return Object.keys(meshUrls).filter(
+      (key) => !lesions.some((l) => l.lesion_id === key)
+    );
+  }, [meshUrls, lesions]);
 
   return (
     <div className="viewer-container">
+      {/* ── Viewport HUD / Mode Indicator ── */}
+      <div className="viewer-hud">
+        {isPlanningView && (
+          <div className="viewer-mode-badge" title="Preoperative Planning View Active">
+            <span className="mode-pulse-dot" />
+            Planning View
+          </div>
+        )}
+        <button
+          id="btn-reset-camera"
+          className="viewer-hud-btn"
+          onClick={handleReset}
+          title="Reset camera view to home position"
+        >
+          🔄 Reset View
+        </button>
+      </div>
+
       <Canvas
         camera={{ position: [0, -300, 300], fov: 50, up: [0, 0, 1] }}
         gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }}
       >
         <color attach="background" args={['#111820']} />
 
-        {/* Improved multi-light rig for clinical depth perception */}
-        <ambientLight intensity={0.35} />
+        {/* Multi-light rig for depth perception */}
+        <ambientLight intensity={0.4} />
         <directionalLight position={[200, 300, 200]} intensity={1.4} castShadow={false} />
         <directionalLight position={[-150, -200, 100]} intensity={0.5} />
         <directionalLight position={[0, -300, -50]} intensity={0.3} />
@@ -213,38 +316,46 @@ const Viewer3D = ({
 
         <Suspense fallback={null}>
           <Center>
-            {/* Medical coordinate correction: NIfTI RAS → Three.js scene */}
+            {/* Coordinate correction: NIfTI RAS -> Three.js scene */}
             <group rotation={[-Math.PI / 2, 0, 0]}>
-              {/* ── Organ meshes ── */}
-              {meshUrls && Object.keys(ORGAN_DATA).map(key => {
-                const organOpacity = organOpacities[key] ?? (ORGAN_DATA[key].defaultOpacity ?? 1.0);
+              {/* ── Anatomical Structure Meshes ── */}
+              {allMeshKeys.map((key) => {
+                const url = meshUrls[key];
+                if (!url) return null;
+                const isVisible = visibility[key] !== false;
+                const opacityOverride = organOpacities[key] ?? 1.0;
+                const isHighlighted = selectedStructure === key;
+
                 return (
                   <OrganErrorBoundary key={key} organId={key}>
                     <OrganMesh
                       organId={key}
-                      url={meshUrls[key]}
-                      visible={visibility[key]}
-                      opacity={organOpacity}
+                      url={url}
+                      visible={isVisible}
+                      opacity={opacityOverride}
+                      highlighted={isHighlighted}
+                      onRegisterCenter={handleRegisterCenter}
                     />
                   </OrganErrorBoundary>
                 );
               })}
 
-              {/* ── Model-predicted lesion meshes ── */}
-              {lesions.map(lesion => {
-                if (!meshUrls) return null;
+              {/* ── Model-Predicted Lesion Meshes ── */}
+              {lesions.map((lesion) => {
+                const url = meshUrls[lesion.lesion_id];
+                if (!url) return null;
                 const classType = lesion.class_name ?? 'cyst';
-                const lesionMeshUrl = meshUrls[lesion.lesion_id];
-                if (!lesionMeshUrl) return null;
                 const isVisible = lesionVisibility[lesion.lesion_id] !== false;
-                const isHighlighted = focusedLesion?.lesion_id === lesion.lesion_id;
+                const isHighlighted =
+                  selectedStructure === lesion.lesion_id ||
+                  focusedTarget?.lesion_id === lesion.lesion_id;
 
                 return (
                   <OrganErrorBoundary key={lesion.lesion_id} organId={lesion.lesion_id}>
                     <LesionMesh
                       lesionId={lesion.lesion_id}
                       classType={classType}
-                      url={lesionMeshUrl}
+                      url={url}
                       visible={isVisible}
                       opacity={lesionOpacity}
                       highlighted={isHighlighted}
@@ -256,9 +367,10 @@ const Viewer3D = ({
           </Center>
         </Suspense>
 
-        {/* Smooth camera animation toward focused lesion */}
+        {/* Smooth camera animation */}
         <CameraController
-          focusTarget={focusTarget}
+          focusTarget={computedFocusTarget}
+          resetTrigger={resetCount}
           onFocusDone={onFocusDone}
         />
 

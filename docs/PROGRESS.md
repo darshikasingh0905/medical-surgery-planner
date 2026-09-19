@@ -1,9 +1,10 @@
 # Project Progress Report: AI-Assisted Preoperative Planning System
 
-**Document Version:** 1.2  
-**Last Updated:** September 2026 (Day 14 Completed)  
+**Document Version:** 1.3  
+**Last Updated:** September 2026 (Day 15 Completed)  
 **Target Repository:** `medical-surgery-planner`  
-**Current Status:** Full-Stack Functional Prototype Active | Genuine KiTS2023 Model Active | Real CT Inference Executed | Surgical Spatial Metrics Engine Active | Live 3D Lesion Visualization Active | 49/49 Tests Passed
+**Current Status:** Full-Stack Preoperative Planning Interface Active | Genuine KiTS2023 Model Active | Real CT Inference Validated | Anatomical Structure Registry Active | Computational Spatial Relationships Engine Active | Interactive Planning View Active | 65/65 Tests Passed
+
 
 ---
 
@@ -283,16 +284,69 @@ python -m pytest tests/ -v
 
 ---
 
-## 7. Active Blockers & Next Steps
+## 7. Day 15 Milestone — Preoperative Anatomy Relationships + Interactive Planning View
+
+### Completed:
+
+#### Anatomical Structure Registry (`src/anatomy/structure_registry.py`)
+- Machine-readable structure catalog for renal and abdominal preoperative planning
+- Genuine disk-based audit: `inspect_case_structures`, `get_available_structures`, `get_structure_metadata`
+- Explicit reporting for unsegmented anatomy: `renal_artery`, `renal_vein`, `renal_pelvis`, `ureter` reported as unavailable with clear explanations (no fake anatomy)
+- Available structures verified with true voxel counts and mesh availability: `kidney_left`, `kidney_right`, `aorta`, `inferior_vena_cava`, `adrenal_gland_left`, `adrenal_gland_right`
+
+#### Spatial Relationships Engine (`src/measurements/spatial_relationships.py`)
+- `calculate_mask_pair_spatial_relationship`: Computes exact minimum physical Euclidean distance with anisotropic voxel spacing ($dx, dy, dz$)
+- Spatial overlap detection: sets `distance_mm = 0.0` and `overlap = True` when masks intersect
+- Fast sub-second $k$-d tree nearest-neighbor calculation
+- Graceful handling of unsegmented/missing masks: `available = False, distance_mm = None, overlap = None`
+- Validated on real case `b2f89382-9416-4e94-9486-b00c6b1de64b` cyst:
+  - Left Kidney: 0.00 mm (overlapping)
+  - Abdominal Aorta: 54.10 mm
+  - Inferior Vena Cava: 90.34 mm
+  - Right Kidney: 91.92 mm
+  - Left Adrenal Gland: 39.83 mm
+
+#### REST API Enhancements (`src/api/routes/cases.py`)
+- `GET /api/cases/{case_id}/structures`: Machine-readable audit of available/unavailable structures
+- `GET /api/cases/{case_id}/lesions/{lesion_id}/relationships`: Computational spatial relationships matrix
+- `GET /api/cases/{case_id}/meshes/{organ}`: Expanded to serve `inferior_vena_cava`, `kidney_right`, and adrenal meshes
+
+#### Interactive Planning View UI (React 18 / Three.js / R3F)
+- View mode switcher: **Normal View** vs **Preoperative Planning View**
+- Planning View sidebar with **Anatomical Structures** section:
+  - Visibility toggles and focus camera buttons for available structures
+  - Explicit disabled notice for unavailable structures (no fake controls)
+- Organ transparency and lesion opacity sliders
+- Enhanced 3D Viewer (`Viewer3D.jsx`):
+  - Dynamic loading of all available structure meshes
+  - Structure highlighting and camera focus derived from true mesh bounding box centers
+  - In-viewport HUD with floating **Reset View** (🔄) button
+- Extended InfoPanel (`InfoPanel.jsx`):
+  - Structured **Spatial Relationships** table with Structure, Availability, Min Distance, and Overlap
+  - **Case Planning Summary** panel summarizing target, class, volume, organ, and anatomy counts
+  - Strict computational governance disclaimers
+
+#### Verification & Test Suite: 65/65 Passing
+- Added `tests/test_day15_planning.py` with 16 comprehensive unit tests covering structure registry, anisotropic physical distances, overlap detection, missing mask handling, and API endpoints
+- All 49 existing tests continue passing (65 total)
+- Frontend production build (`npm run build`) passes cleanly with zero errors
+
+### Documentation
+- [`docs/DAY15.md`](DAY15.md) — Full Day 15 milestone report
+- [`docs/PREOPERATIVE_PLANNING.md`](PREOPERATIVE_PLANNING.md) — Technical methodology and clinical governance
+
+---
+
+## 8. Active Blockers & Next Steps
 
 ### Active Blockers:
 * **None**
 
-### Possible Day 15 Directions:
-1. Multi-case comparison dashboard
-2. Axial/coronal/sagittal 2D slice viewer integration in the web frontend
-3. Additional organ segmentation (spleen, pancreas, bladder)
-4. Export/report generation (PDF surgical planning summary)
+### Possible Day 16 Directions:
+1. Multi-planar reconstruction (MPR) 2D slice viewer (Axial, Coronal, Sagittal) synchronized with 3D cursor
+2. Automated PDF surgical planning case report generation
+3. Specialized vascular sub-segmentation integration (e.g. TotalSegmentator tissue/vessel models)
+
 
 ---
 

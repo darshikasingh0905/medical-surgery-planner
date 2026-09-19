@@ -106,7 +106,8 @@ async def get_case_mesh(case_id: str, organ: str):
     """
     ALLOWED_ORGANS = {
         'liver', 'heart', 'aorta', 'kidney_left', 'kidney_right',
-        'cyst_left', 'cyst_right', 'tumor_left', 'tumor_right'
+        'cyst_left', 'cyst_right', 'tumor_left', 'tumor_right',
+        'inferior_vena_cava', 'adrenal_gland_left', 'adrenal_gland_right'
     }
     
     if organ not in ALLOWED_ORGANS:
@@ -121,6 +122,7 @@ async def get_case_mesh(case_id: str, organ: str):
         raise HTTPException(status_code=404, detail=f"Mesh not found for {organ}")
         
     return FileResponse(path=mesh_path, filename=f"{organ}.obj", media_type="text/plain")
+
 
 
 @router.get("/{case_id}/lesions")
@@ -209,4 +211,64 @@ async def get_specific_lesion(case_id: str, lesion_id: str):
         if lesion.get("lesion_id") == lesion_id:
             return lesion
     raise HTTPException(status_code=404, detail=f"Lesion '{lesion_id}' not found in case '{case_id}'")
+
+
+@router.get("/{case_id}/structures")
+async def get_case_anatomical_structures(case_id: str):
+    """
+    Retrieve machine-readable audit of anatomical structures for this case,
+    including availability on disk, mask paths, mesh availability, and status explanations.
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail="Case not found")
+        
+    case_path = get_case_path(case_id)
+    from src.anatomy.structure_registry import inspect_case_structures
+    structures_dict = inspect_case_structures(case_path)
+    return {
+        "case_id": case_id,
+        "structures": list(structures_dict.values())
+    }
+
+
+@router.get("/{case_id}/lesions/{lesion_id}/relationships")
+async def get_lesion_spatial_relationships(case_id: str, lesion_id: str):
+    """
+    Retrieve computational spatial relationships between a specific lesion and
+    registered anatomical structures for a completed case.
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail="Case not found")
+        
+    case_info = get_case_info(case_id)
+    if case_info.get("status") != "completed":
+        raise HTTPException(status_code=400, detail=f"Results not ready. Case status is '{case_info.get('status')}'")
+        
+    case_path = get_case_path(case_id)
+    cache_path = case_path / "measurements" / f"relationships_{lesion_id}.json"
+    if cache_path.exists():
+        with open(cache_path, "r") as f:
+            data = json.load(f)
+        return data
+        
+    # Check if lesion mask exists
+    lesion_mask_path = case_path / "lesions" / f"{lesion_id}.nii.gz"
+    if not lesion_mask_path.exists():
+        candidates = list((case_path / "lesions").glob(f"{lesion_id}*.nii*"))
+        if candidates:
+            lesion_mask_path = candidates[0]
+        else:
+            raise HTTPException(status_code=404, detail=f"Lesion '{lesion_id}' not found in case '{case_id}'")
+            
+    from src.measurements.spatial_relationships import compute_lesion_spatial_relationships
+    payload = compute_lesion_spatial_relationships(lesion_mask_path, case_path)
+    payload["case_id"] = case_id
+    payload["lesion_id"] = lesion_id
+    
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(cache_path, "w") as f:
+        json.dump(payload, f, indent=2)
+        
+    return payload
+
 
