@@ -16,6 +16,9 @@ import {
   getLesionRelationships,
   getMeshUrl,
   getCaseMPRMetadata,
+  getPlanningTargets,
+  createPlanningAnnotation,
+  deletePlanningAnnotation,
 } from './api';
 import './index.css';
 
@@ -99,6 +102,12 @@ function App() {
   const [mprWindowWidth, setMprWindowWidth] = useState(400);
   const [mprWindowLevel, setMprWindowLevel] = useState(40);
   const [mprShowLesionOverlay, setMprShowLesionOverlay] = useState(true);
+
+  // ── Surgical Planning Targets & Annotations state (Day 17) ────────────────
+  const [planningTargets, setPlanningTargets] = useState([]);
+  const [targetVisibility, setTargetVisibility] = useState({});
+  const [selectedTarget, setSelectedTarget] = useState(null);
+  const [isAnnotationMode, setIsAnnotationMode] = useState(false);
 
   // ── Polling ref ────────────────────────────────────────────────────────────
   const pollIntervalRef = useRef(null);
@@ -212,6 +221,21 @@ function App() {
             } finally {
               setMprLoading(false);
             }
+
+            // 6. Fetch Planning Targets & Annotations (Day 17)
+            try {
+              const targetsData = await getPlanningTargets(id);
+              const targetsList = targetsData.targets ?? [];
+              setPlanningTargets(targetsList);
+              const initTargetVis = {};
+              targetsList.forEach((t) => {
+                initTargetVis[t.target_id] = true;
+              });
+              setTargetVisibility(initTargetVis);
+            } catch (err) {
+              console.warn('Planning targets not available:', err.message);
+              setPlanningTargets([]);
+            }
           } else if (data.status === 'failed') {
             stopPolling();
             setAppState('failed');
@@ -287,6 +311,10 @@ function App() {
     setMprWindowWidth(400);
     setMprWindowLevel(40);
     setMprShowLesionOverlay(true);
+    setPlanningTargets([]);
+    setTargetVisibility({});
+    setSelectedTarget(null);
+    setIsAnnotationMode(false);
     setAppState('initial');
   }, [stopPolling]);
 
@@ -419,6 +447,60 @@ function App() {
       setMprWindowLevel(p.wl);
     }
   }, [mprMetadata]);
+
+  // ── Planning Target Handlers (Day 17) ──────────────────────────────────────
+  const handleSelectTarget = useCallback((target) => {
+    setSelectedTarget(target);
+    if (target.voxel_coordinate) {
+      setVoxelCursor(target.voxel_coordinate);
+    }
+  }, []);
+
+  const handleFocusTarget = useCallback((target) => {
+    setSelectedTarget(target);
+    setFocusedTarget(target);
+    if (target.voxel_coordinate) {
+      setVoxelCursor(target.voxel_coordinate);
+    }
+  }, []);
+
+  const handleToggleTargetVisibility = useCallback((targetId) => {
+    setTargetVisibility((prev) => ({
+      ...prev,
+      [targetId]: prev[targetId] === false ? true : false,
+    }));
+  }, []);
+
+  const handleDeleteTarget = useCallback(async (targetId) => {
+    if (!caseId) return;
+    try {
+      await deletePlanningAnnotation(caseId, targetId);
+      setPlanningTargets((prev) => prev.filter((t) => t.target_id !== targetId));
+      if (selectedTarget?.target_id === targetId) {
+        setSelectedTarget(null);
+      }
+    } catch (err) {
+      console.error('Failed to delete annotation:', err);
+    }
+  }, [caseId, selectedTarget]);
+
+  const handleAddPlanningPoint = useCallback(async (voxelCoord) => {
+    if (!caseId) return;
+    const userCount = planningTargets.filter((t) => t.source === 'user').length;
+    const newLabel = `Planning Point ${userCount + 1}`;
+    try {
+      const created = await createPlanningAnnotation(caseId, {
+        label: newLabel,
+        voxel_coordinate: voxelCoord,
+        notes: 'Created via interactive MPR slice click.',
+      });
+      setPlanningTargets((prev) => [...prev, created]);
+      setTargetVisibility((prev) => ({ ...prev, [created.target_id]: true }));
+      setSelectedTarget(created);
+    } catch (err) {
+      console.error('Failed to create planning point:', err);
+    }
+  }, [caseId, planningTargets]);
 
   // ── Build mesh URL map (organs + registered structures + lesions) ──────────
   const meshUrls = React.useMemo(() => {
@@ -578,6 +660,15 @@ function App() {
                 mprShowLesionOverlay={mprShowLesionOverlay}
                 onMprPresetSelect={handleMprPresetSelect}
                 onToggleMprLesionOverlay={setMprShowLesionOverlay}
+                planningTargets={planningTargets}
+                targetVisibility={targetVisibility}
+                onToggleTargetVisibility={handleToggleTargetVisibility}
+                selectedTarget={selectedTarget}
+                onSelectTarget={handleSelectTarget}
+                onFocusTarget={handleFocusTarget}
+                onDeleteTarget={handleDeleteTarget}
+                isAnnotationMode={isAnnotationMode}
+                onToggleAnnotationMode={setIsAnnotationMode}
               />
             </aside>
 
@@ -594,6 +685,10 @@ function App() {
                   selectedStructure={selectedStructure}
                   focusedTarget={focusedTarget}
                   isPlanningView={isPlanningView}
+                  planningTargets={planningTargets}
+                  targetVisibility={targetVisibility}
+                  selectedTarget={selectedTarget}
+                  onSelectTarget={handleSelectTarget}
                   onFocusDone={handleFocusDone}
                   onResetCamera={handleResetCamera}
                 />
@@ -617,6 +712,13 @@ function App() {
                       setMprWindowLevel(wl);
                     }}
                     onPresetSelect={handleMprPresetSelect}
+                    planningTargets={planningTargets}
+                    targetVisibility={targetVisibility}
+                    selectedTarget={selectedTarget}
+                    onSelectTarget={handleSelectTarget}
+                    isAnnotationMode={isAnnotationMode}
+                    onToggleAnnotationMode={setIsAnnotationMode}
+                    onAddPlanningPoint={handleAddPlanningPoint}
                   />
                 </div>
               )}
@@ -635,6 +737,10 @@ function App() {
                       selectedStructure={selectedStructure}
                       focusedTarget={focusedTarget}
                       isPlanningView={isPlanningView}
+                      planningTargets={planningTargets}
+                      targetVisibility={targetVisibility}
+                      selectedTarget={selectedTarget}
+                      onSelectTarget={handleSelectTarget}
                       onFocusDone={handleFocusDone}
                       onResetCamera={handleResetCamera}
                     />
@@ -655,6 +761,13 @@ function App() {
                         setMprWindowLevel(wl);
                       }}
                       onPresetSelect={handleMprPresetSelect}
+                      planningTargets={planningTargets}
+                      targetVisibility={targetVisibility}
+                      selectedTarget={selectedTarget}
+                      onSelectTarget={handleSelectTarget}
+                      isAnnotationMode={isAnnotationMode}
+                      onToggleAnnotationMode={setIsAnnotationMode}
+                      onAddPlanningPoint={handleAddPlanningPoint}
                     />
                   </div>
                 </div>
@@ -668,6 +781,7 @@ function App() {
               organResults={selectedOrgan && results ? results[selectedOrgan] : null}
               selectedLesion={selectedLesion}
               selectedStructure={selectedStructure}
+              selectedTarget={selectedTarget}
               structures={structures}
               lesions={lesions}
               relationships={relationships}

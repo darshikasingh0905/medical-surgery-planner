@@ -341,5 +341,171 @@ async def get_case_mpr_slice(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error extracting slice: {str(e)}")
 
+# =====================================================================
+# Preoperative Surgical Planning Targets & Annotations (Day 17)
+# =====================================================================
 
+@router.get("/{case_id}/planning/targets")
+async def get_planning_targets(case_id: str):
+    """
+    Retrieve all planning targets for a case, unifying computational model-predicted
+    findings (e.g. renal cyst/tumor segmentations) and user-created planning annotations.
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+
+    from src.planning.annotations import annotation_service
+    from src.planning.planning_targets import PlanningTargetsResponse
+
+    try:
+        targets = annotation_service.get_all_planning_targets(case_id)
+        model_count = sum(1 for t in targets if t.source == "model")
+        user_count = sum(1 for t in targets if t.source == "user")
+
+        return PlanningTargetsResponse(
+            case_id=case_id,
+            total_targets=len(targets),
+            model_findings_count=model_count,
+            user_annotations_count=user_count,
+            targets=targets,
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving planning targets: {str(e)}")
+
+
+@router.get("/{case_id}/planning/annotations")
+async def get_user_annotations(case_id: str):
+    """
+    Retrieve all user-created planning annotations for a case.
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+
+    from src.planning.annotations import annotation_service
+
+    try:
+        annotations = annotation_service.list_user_annotations(case_id)
+        return {
+            "case_id": case_id,
+            "total_annotations": len(annotations),
+            "annotations": [a.model_dump() for a in annotations],
+        }
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving annotations: {str(e)}")
+
+
+@router.post("/{case_id}/planning/annotations", status_code=status.HTTP_201_CREATED)
+async def create_user_annotation(case_id: str, payload: dict):
+    """
+    Create a new user-defined surgical planning annotation.
+    Validates coordinates against CT volume bounds.
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+
+    from src.planning.annotations import annotation_service
+    from src.planning.planning_targets import AnnotationCreateRequest
+
+    try:
+        req = AnnotationCreateRequest(**payload)
+        target = annotation_service.create_user_annotation(case_id, req)
+        return target
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating annotation: {str(e)}")
+
+
+@router.put("/{case_id}/planning/annotations/{annotation_id}")
+async def update_user_annotation(case_id: str, annotation_id: str, payload: dict):
+    """
+    Update label, notes, or coordinates of an existing user planning annotation.
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+
+    from src.planning.annotations import annotation_service
+    from src.planning.planning_targets import AnnotationUpdateRequest
+
+    try:
+        req = AnnotationUpdateRequest(**payload)
+        updated = annotation_service.update_user_annotation(case_id, annotation_id, req)
+        if updated is None:
+            raise HTTPException(
+                status_code=404, detail=f"Annotation '{annotation_id}' not found in case '{case_id}'"
+            )
+        return updated
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating annotation: {str(e)}")
+
+
+@router.delete("/{case_id}/planning/annotations/{annotation_id}")
+async def delete_user_annotation(case_id: str, annotation_id: str):
+    """
+    Delete an existing user planning annotation.
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+
+    from src.planning.annotations import annotation_service
+
+    try:
+        deleted = annotation_service.delete_user_annotation(case_id, annotation_id)
+        if not deleted:
+            raise HTTPException(
+                status_code=404, detail=f"Annotation '{annotation_id}' not found in case '{case_id}'"
+            )
+        return {"status": "deleted", "annotation_id": annotation_id, "case_id": case_id}
+    except HTTPException:
+        raise
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting annotation: {str(e)}")
+
+
+@router.post(
+    "/{case_id}/planning/annotations/from-lesion/{lesion_id}",
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_annotation_from_lesion(
+    case_id: str, lesion_id: str, payload: dict | None = None
+):
+    """
+    Create a planning annotation anchored to a genuine model-predicted lesion finding.
+    Extracts centroid coordinates and links to the lesion mask.
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+
+    from src.planning.annotations import annotation_service
+
+    label = payload.get("label") if payload else None
+    notes = payload.get("notes") if payload else None
+
+    try:
+        target = annotation_service.create_annotation_from_lesion(
+            case_id=case_id, lesion_id=lesion_id, label=label, notes=notes
+        )
+        return target
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error creating annotation from lesion: {str(e)}"
+        )
 

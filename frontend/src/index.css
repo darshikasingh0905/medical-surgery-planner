@@ -1966,3 +1966,306 @@ body {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   DAY 17: SURGICAL PLANNING TARGETS & ANNOTATION MARKERS
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── MPR Annotation Mode Banner ────────────────────────────────────── */
+.mpr-annotation-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.18), rgba(245, 158, 11, 0.08));
+  border-bottom: 1px solid rgba(245, 158, 11, 0.45);
+  padding: 0.45rem 1rem;
+  font-size: 0.8rem;
+  color: #fbbf24;
+  animation: bannerFadeIn 0.25s ease-out;
+}
+
+@keyframes bannerFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.mpr-annotation-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 8px #f59e0b;
+  animation: pulseDot 1.4s infinite;
+  flex-shrink: 0;
+}
+
+@keyframes pulseDot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0.6; }
+}
+
+.mpr-annotation-text {
+  flex: 1;
+}
+
+.mpr-annotation-cancel-btn {
+  background: rgba(245, 158, 11, 0.2);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+  border-radius: 4px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.mpr-annotation-cancel-btn:hover {
+  background: rgba(245, 158, 11, 0.35);
+  border-color: #f59e0b;
+  color: #ffffff;
+}
+
+.mpr-toggle-btn--annotate.active {
+  background: rgba(245, 158, 11, 0.25);
+  border-color: #f59e0b;
+  color: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.35);
+}
+
+/* Crosshair cursor when annotating */
+.cursor-crosshair {
+  cursor: crosshair !important;
+}
+
+/* ── MPR 2D Slice Markers Overlay ──────────────────────────────────── */
+.mpr-markers-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.mpr-planning-marker {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #00e5ff;
+  background: rgba(0, 0, 0, 0.4);
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  z-index: 10;
+}
+
+.mpr-planning-marker:hover {
+  transform: translate(-50%, -50%) scale(1.35);
+  z-index: 15;
+}
+
+.mpr-planning-marker--selected {
+  transform: translate(-50%, -50%) scale(1.4);
+  border-width: 2.5px;
+  animation: selectedMarkerPulse 1.8s infinite;
+  z-index: 20;
+}
+
+@keyframes selectedMarkerPulse {
+  0%, 100% { box-shadow: 0 0 6px currentColor; }
+  50% { box-shadow: 0 0 14px currentColor, 0 0 22px currentColor; }
+}
+
+.mpr-marker-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+}
+
+.mpr-marker-label {
+  position: absolute;
+  left: 18px;
+  top: -4px;
+  background: rgba(10, 18, 30, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 0.12rem 0.35rem;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+}
+
+/* ── Sidebar Planning Targets Section ──────────────────────────────── */
+.planning-targets-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 1rem;
+}
+
+.planning-targets-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+}
+
+.sidebar-add-point-btn {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fbbf24;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.25rem 0.55rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.sidebar-add-point-btn:hover {
+  background: rgba(245, 158, 11, 0.25);
+  border-color: #f59e0b;
+  color: #ffffff;
+}
+
+.sidebar-add-point-btn.active {
+  background: #f59e0b;
+  border-color: #d97706;
+  color: #0f172a;
+}
+
+.planning-targets-empty {
+  font-size: 0.78rem;
+  color: #64748b;
+  padding: 0.5rem 0.2rem;
+  line-height: 1.4;
+  font-style: italic;
+}
+
+.planning-targets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.planning-target-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.planning-target-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.planning-target-item.selected {
+  background: rgba(0, 229, 255, 0.08);
+  border-color: rgba(0, 229, 255, 0.4);
+}
+
+.target-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.target-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.target-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.target-type-badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 0.08rem 0.35rem;
+  border-radius: 3px;
+  letter-spacing: 0.3px;
+}
+
+.target-badge--model {
+  background: rgba(0, 229, 255, 0.15);
+  color: #00e5ff;
+  border: 1px solid rgba(0, 229, 255, 0.3);
+}
+
+.target-badge--user {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.target-coords-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.15rem;
+}
+
+.target-coords-text {
+  font-size: 0.68rem;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+
+.target-volume-pill {
+  font-size: 0.65rem;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+}
+
+.target-delete-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0.15rem;
+  border-radius: 3px;
+  opacity: 0.6;
+  transition: opacity var(--transition), color var(--transition);
+}
+
+.target-delete-btn:hover {
+  opacity: 1;
+  color: #ef4444;
+}
+
+/* ── InfoPanel Planning Target View ────────────────────────────────── */
+.info-panel--planning-target {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.info-structure-badge--model {
+  background: rgba(0, 229, 255, 0.15);
+  color: #00e5ff;
+  border: 1px solid rgba(0, 229, 255, 0.3);
+}
+
+.info-structure-badge--user {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+

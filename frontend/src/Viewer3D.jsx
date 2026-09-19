@@ -122,6 +122,49 @@ const LesionMesh = ({
 };
 
 /**
+ * PlanningMarker3D — Renders a 3D surgical planning marker.
+ * Supports model-predicted lesion centroids and user-created custom points.
+ */
+const PlanningMarker3D = ({ target, selected = false, onSelect }) => {
+  const isModel = target.source === 'model';
+  const color = isModel ? '#00E5FF' : '#F59E0B';
+  const pos = target.physical_coordinate;
+  if (!pos || pos.length !== 3) return null;
+
+  return (
+    <group
+      position={pos}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (onSelect) onSelect(target);
+      }}
+    >
+      {/* Central planning target marker */}
+      <mesh>
+        <sphereGeometry args={[selected ? 4.5 : 3.2, 16, 16]} />
+        <meshStandardMaterial
+          color={color}
+          emissive={color}
+          emissiveIntensity={selected ? 1.0 : 0.65}
+          roughness={0.2}
+          metalness={0.2}
+        />
+      </mesh>
+      {/* Outer orientation halo ring */}
+      <mesh>
+        <ringGeometry args={[selected ? 5.5 : 4.2, selected ? 7.0 : 5.5, 24]} />
+        <meshBasicMaterial
+          color={color}
+          side={THREE.DoubleSide}
+          transparent
+          opacity={selected ? 0.9 : 0.5}
+        />
+      </mesh>
+    </group>
+  );
+};
+
+/**
  * CameraController — Smoothly animates camera focus to target position or resets to home.
  */
 function CameraController({ focusTarget, resetTrigger, onFocusDone }) {
@@ -223,7 +266,7 @@ class OrganErrorBoundary extends React.Component {
  * Viewer3D — 3D anatomical scene using React Three Fiber.
  *
  * Supports standard view and preoperative planning view.
- * Dynamically renders all available anatomical structures and model-predicted lesions.
+ * Dynamically renders anatomical structures, model-predicted lesions, and 3D planning markers.
  */
 const Viewer3D = ({
   visibility = {},
@@ -235,6 +278,11 @@ const Viewer3D = ({
   selectedStructure = null,
   focusedTarget = null,
   isPlanningView = false,
+  // Planning Markers Layer (Day 17)
+  planningTargets = [],
+  targetVisibility = {},
+  selectedTarget = null,
+  onSelectTarget,
   onFocusDone,
   onResetCamera,
 }) => {
@@ -245,13 +293,19 @@ const Viewer3D = ({
     setCenters((prev) => ({ ...prev, [id]: centerCoords }));
   }, []);
 
-  // Compute camera target based on focusedTarget (lesion object, structure id, or explicit coordinates)
+  // Compute camera target based on focusedTarget (planning target, lesion, structure id, or explicit coordinates)
   const computedFocusTarget = useMemo(() => {
     if (!focusedTarget) return null;
 
     // Direct [x, y, z] coordinates
     if (Array.isArray(focusedTarget) && focusedTarget.length === 3) {
       return focusedTarget;
+    }
+
+    // Planning target with physical_coordinate
+    if (focusedTarget.physical_coordinate && Array.isArray(focusedTarget.physical_coordinate)) {
+      const [x, y, z] = focusedTarget.physical_coordinate;
+      return [x, z, -y];
     }
 
     // Lesion with centroid_mm
@@ -361,6 +415,20 @@ const Viewer3D = ({
                       highlighted={isHighlighted}
                     />
                   </OrganErrorBoundary>
+                );
+              })}
+
+              {/* ── Surgical Planning Markers (Day 17) ── */}
+              {planningTargets.map((target) => {
+                if (targetVisibility[target.target_id] === false) return null;
+                const isSelected = selectedTarget?.target_id === target.target_id;
+                return (
+                  <PlanningMarker3D
+                    key={target.target_id}
+                    target={target}
+                    selected={isSelected}
+                    onSelect={onSelectTarget}
+                  />
                 );
               })}
             </group>

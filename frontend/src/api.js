@@ -163,5 +163,86 @@ export function getMPRSliceUrl(caseId, plane, index, ww = 400, wl = 40, overlayL
   return `${BASE_URL}/cases/${caseId}/mpr/slice/${plane}/${index}?${params.toString()}`;
 }
 
+/**
+ * Retrieve all planning targets for a case (model findings + user annotations).
+ *
+ * @param {string} caseId - The UUID of the case.
+ * @returns {Promise<{ case_id: string, total_targets: number, targets: Array }>}
+ */
+export async function getPlanningTargets(caseId) {
+  return apiFetch(`/cases/${caseId}/planning/targets`);
+}
+
+/**
+ * Retrieve user-created planning annotations for a case.
+ *
+ * @param {string} caseId - The UUID of the case.
+ * @returns {Promise<{ case_id: string, total_annotations: number, annotations: Array }>}
+ */
+export async function getPlanningAnnotations(caseId) {
+  return apiFetch(`/cases/${caseId}/planning/annotations`);
+}
+
+/**
+ * Create a new user-defined surgical planning annotation.
+ *
+ * @param {string} caseId - The UUID of the case.
+ * @param {object} payload - { label, voxel_coordinate, notes, ... }
+ * @returns {Promise<object>} Created PlanningTarget
+ */
+export async function createPlanningAnnotation(caseId, payload) {
+  return apiFetch(`/cases/${caseId}/planning/annotations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Update an existing user planning annotation.
+ *
+ * @param {string} caseId - The UUID of the case.
+ * @param {string} annotationId - Target ID
+ * @param {object} payload - Updated fields
+ * @returns {Promise<object>} Updated PlanningTarget
+ */
+export async function updatePlanningAnnotation(caseId, annotationId, payload) {
+  return apiFetch(`/cases/${caseId}/planning/annotations/${annotationId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Delete a user planning annotation.
+ *
+ * @param {string} caseId - The UUID of the case.
+ * @param {string} annotationId - Target ID to delete
+ * @returns {Promise<{ status: string, annotation_id: string }>}
+ */
+export async function deletePlanningAnnotation(caseId, annotationId) {
+  return apiFetch(`/cases/${caseId}/planning/annotations/${annotationId}`, {
+    method: 'DELETE',
+  });
+}
+
+/**
+ * Create an annotation referencing an existing computational lesion.
+ *
+ * @param {string} caseId - The UUID of the case.
+ * @param {string} lesionId - Lesion ID (e.g. cyst_left)
+ * @param {object} payload - { label?: string, notes?: string }
+ * @returns {Promise<object>} Created PlanningTarget
+ */
+export async function createAnnotationFromLesion(caseId, lesionId, payload = {}) {
+  return apiFetch(`/cases/${caseId}/planning/annotations/from-lesion/${lesionId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+
 
 

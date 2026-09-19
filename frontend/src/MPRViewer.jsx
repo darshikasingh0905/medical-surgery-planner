@@ -2,10 +2,11 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { getMPRSliceUrl } from './api';
 
 /**
- * MPRViewer — Synchronized Multi-Planar Reconstruction Viewer.
+ * MPRViewer — Synchronized Multi-Planar Reconstruction Viewer with Planning Markers.
  *
  * Displays three orthogonal planes (Axial, Coronal, Sagittal) derived from the genuine CT volume.
- * Crosshairs and slice positions are fully synchronized across all 3 planes and with 3D space.
+ * Crosshairs, slice positions, and surgical planning markers are fully synchronized across
+ * all 3 planes and with 3D space.
  *
  * Coordinate Mapping:
  * - Voxel Coordinate: [x, y, z] within [0..Nx-1, 0..Ny-1, 0..Nz-1]
@@ -28,8 +29,13 @@ const MPRPanel = ({
   crosshairV,
   displayDim, // { width, height }
   showCrosshairs,
+  markers = [],
+  showPlanningMarkers = true,
+  isAnnotationMode = false,
+  selectedTarget = null,
   onSliceChange,
   onPanelClick,
+  onSelectTarget,
 }) => {
   const containerRef = useRef(null);
   const isDraggingRef = useRef(false);
@@ -73,7 +79,7 @@ const MPRPanel = ({
   };
 
   const handlePointerMove = (e) => {
-    if (isDraggingRef.current) {
+    if (isDraggingRef.current && !isAnnotationMode) {
       handlePointerAction(e);
     }
   };
@@ -87,7 +93,7 @@ const MPRPanel = ({
   const crosshairYPct = displayDim ? (crosshairV / displayDim.height) * 100 : 50;
 
   return (
-    <div className="mpr-panel" id={`mpr-panel-${plane}`}>
+    <div className={`mpr-panel ${isAnnotationMode ? 'mpr-panel--annotating' : ''}`} id={`mpr-panel-${plane}`}>
       <div className="mpr-panel-header">
         <span className="mpr-plane-name">{label}</span>
         <span className="mpr-slice-badge">
@@ -97,7 +103,7 @@ const MPRPanel = ({
 
       <div
         ref={containerRef}
-        className="mpr-slice-viewport"
+        className={`mpr-slice-viewport ${isAnnotationMode ? 'cursor-crosshair' : ''}`}
         onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -128,6 +134,46 @@ const MPRPanel = ({
               className="mpr-crosshair-center"
               style={{ left: `${crosshairXPct}%`, top: `${crosshairYPct}%` }}
             />
+          </div>
+        )}
+
+        {/* ── Surgical Planning Markers Overlay (Day 17) ── */}
+        {showPlanningMarkers && displayDim && (
+          <div className="mpr-markers-overlay">
+            {markers.map((m) => {
+              const isModel = m.source === 'model';
+              const markerColor = isModel ? '#00e5ff' : '#f59e0b';
+              const isSelected = selectedTarget?.target_id === m.target_id;
+
+              return (
+                <div
+                  key={m.target_id}
+                  className={`mpr-planning-marker ${isSelected ? 'mpr-planning-marker--selected' : ''}`}
+                  style={{
+                    left: `${m.xPct}%`,
+                    top: `${m.yPct}%`,
+                    opacity: m.opacity,
+                    borderColor: markerColor,
+                    boxShadow: `0 0 ${m.dist === 0 ? '8px' : '4px'} ${markerColor}`,
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onSelectTarget) onSelectTarget(m);
+                  }}
+                  title={`${m.label}\nCoord: [${m.voxel_coordinate.join(', ')}]\n${isModel ? 'Computational Model Finding' : 'User Planning Marker'}`}
+                >
+                  <span
+                    className="mpr-marker-dot"
+                    style={{ backgroundColor: markerColor }}
+                  />
+                  {m.dist === 0 && (
+                    <span className="mpr-marker-label" style={{ color: markerColor }}>
+                      {m.label.length > 20 ? `${m.label.slice(0, 18)}…` : m.label}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -161,8 +207,17 @@ const MPRViewer = ({
   windowLevel = 40,
   onWindowChange,
   onPresetSelect,
+  // Planning Marker Layer props (Day 17)
+  planningTargets = [],
+  targetVisibility = {},
+  selectedTarget = null,
+  onSelectTarget,
+  isAnnotationMode = false,
+  onToggleAnnotationMode,
+  onAddPlanningPoint,
 }) => {
   const [showCrosshairs, setShowCrosshairs] = useState(true);
+  const [showPlanningMarkers, setShowPlanningMarkers] = useState(true);
 
   if (!mprMetadata || !caseId) {
     return (
@@ -173,7 +228,7 @@ const MPRViewer = ({
     );
   }
 
-  const shape = mprMetadata.shape; // [Nx, Ny, Nz] = [293, 293, 344]
+  const shape = mprMetadata.shape; // [Nx, Ny, Nz]
   const nx = shape[0];
   const ny = shape[1];
   const nz = shape[2];
@@ -213,6 +268,62 @@ const MPRViewer = ({
     worldCoords = `(${wx}, ${wy}, ${wz}) mm`;
   }
 
+  // ── Calculate Visible Planning Markers for each Orthogonal Plane ──
+  const activeTargets = planningTargets.filter(
+    (t) => targetVisibility[t.target_id] !== false && t.voxel_coordinate && t.voxel_coordinate.length === 3
+  );
+
+  const axialMarkers = activeTargets
+    .map((t) => {
+      const [tx, ty, tz] = t.voxel_coordinate;
+      const dist = Math.abs(tz - vz);
+      if (dist > 2) return null;
+      const u = (nx - 1) - tx;
+      const v = (ny - 1) - ty;
+      return {
+        ...t,
+        xPct: (u / nx) * 100,
+        yPct: (v / ny) * 100,
+        dist,
+        opacity: dist === 0 ? 1.0 : dist === 1 ? 0.7 : 0.35,
+      };
+    })
+    .filter(Boolean);
+
+  const coronalMarkers = activeTargets
+    .map((t) => {
+      const [tx, ty, tz] = t.voxel_coordinate;
+      const dist = Math.abs(ty - vy);
+      if (dist > 2) return null;
+      const u = (nx - 1) - tx;
+      const v = (nz - 1) - tz;
+      return {
+        ...t,
+        xPct: (u / nx) * 100,
+        yPct: (v / nz) * 100,
+        dist,
+        opacity: dist === 0 ? 1.0 : dist === 1 ? 0.7 : 0.35,
+      };
+    })
+    .filter(Boolean);
+
+  const sagittalMarkers = activeTargets
+    .map((t) => {
+      const [tx, ty, tz] = t.voxel_coordinate;
+      const dist = Math.abs(tx - vx);
+      if (dist > 2) return null;
+      const u = (ny - 1) - ty;
+      const v = (nz - 1) - tz;
+      return {
+        ...t,
+        xPct: (u / ny) * 100,
+        yPct: (v / nz) * 100,
+        dist,
+        opacity: dist === 0 ? 1.0 : dist === 1 ? 0.7 : 0.35,
+      };
+    })
+    .filter(Boolean);
+
   // Slice change handlers
   const handleAxialSliceChange = (newZ) => {
     onCursorChange([vx, vy, newZ]);
@@ -228,18 +339,26 @@ const MPRViewer = ({
 
   // Click on panel handlers
   const handlePanelClick = (plane, u, v) => {
+    let newVoxel = [vx, vy, vz];
     if (plane === 'axial') {
       const newX = (nx - 1) - u;
       const newY = (ny - 1) - v;
-      onCursorChange([newX, newY, vz]);
+      newVoxel = [newX, newY, vz];
     } else if (plane === 'coronal') {
       const newX = (nx - 1) - u;
       const newZ = (nz - 1) - v;
-      onCursorChange([newX, vy, newZ]);
+      newVoxel = [newX, vy, newZ];
     } else if (plane === 'sagittal') {
       const newY = (ny - 1) - u;
       const newZ = (nz - 1) - v;
-      onCursorChange([vx, newY, newZ]);
+      newVoxel = [vx, newY, newZ];
+    }
+
+    onCursorChange(newVoxel);
+
+    // If explicit annotation mode is active, trigger planning point creation
+    if (isAnnotationMode && onAddPlanningPoint) {
+      onAddPlanningPoint(newVoxel);
     }
   };
 
@@ -252,7 +371,7 @@ const MPRViewer = ({
 
   return (
     <div className="mpr-container">
-      {/* ── Top Controls Bar: Presets, Windowing, Options ── */}
+      {/* ── Top Controls Bar: Presets, Windowing, Options, Planning ── */}
       <div className="mpr-toolbar">
         <div className="mpr-presets-group">
           <span className="mpr-toolbar-label">Preset:</span>
@@ -300,12 +419,51 @@ const MPRViewer = ({
           >
             {showLesionOverlay ? '🔬 Lesion Overlay On' : '🔬 Lesion Overlay Off'}
           </button>
+
+          <button
+            id="btn-toggle-planning-markers"
+            className={`mpr-toggle-btn ${showPlanningMarkers ? 'active' : ''}`}
+            onClick={() => setShowPlanningMarkers(!showPlanningMarkers)}
+            title="Toggle surgical planning markers on 2D slices"
+            type="button"
+          >
+            {showPlanningMarkers ? '📍 Markers On' : '📍 Markers Off'}
+          </button>
+
+          {onToggleAnnotationMode && (
+            <button
+              id="btn-toggle-annotation-mode"
+              className={`mpr-toggle-btn mpr-toggle-btn--annotate ${isAnnotationMode ? 'active' : ''}`}
+              onClick={() => onToggleAnnotationMode(!isAnnotationMode)}
+              title="Click slice to add a surgical planning reference point"
+              type="button"
+            >
+              {isAnnotationMode ? '✏️ Annotation Mode ON' : '➕ Add Point'}
+            </button>
+          )}
         </div>
       </div>
 
+      {/* ── Active Annotation Mode Notice ── */}
+      {isAnnotationMode && (
+        <div className="mpr-annotation-banner" id="mpr-annotation-banner">
+          <span className="mpr-annotation-pulse" />
+          <span className="mpr-annotation-text">
+            <strong>Annotation Mode Active:</strong> Click on any CT slice to place a surgical planning reference point.
+          </span>
+          <button
+            className="mpr-annotation-cancel-btn"
+            onClick={() => onToggleAnnotationMode(false)}
+            type="button"
+          >
+            ✕ Exit Mode
+          </button>
+        </div>
+      )}
+
       {/* ── Three Orthogonal Panels Grid ── */}
       <div className="mpr-grid">
-        {/* Panel 1: Axial (Top or Main) */}
+        {/* Panel 1: Axial (Z) */}
         <MPRPanel
           plane="axial"
           label="Axial (Z)"
@@ -316,11 +474,16 @@ const MPRViewer = ({
           crosshairV={axialV}
           displayDim={{ width: nx, height: ny }}
           showCrosshairs={showCrosshairs}
+          markers={axialMarkers}
+          showPlanningMarkers={showPlanningMarkers}
+          isAnnotationMode={isAnnotationMode}
+          selectedTarget={selectedTarget}
           onSliceChange={handleAxialSliceChange}
           onPanelClick={handlePanelClick}
+          onSelectTarget={onSelectTarget}
         />
 
-        {/* Panel 2: Coronal */}
+        {/* Panel 2: Coronal (Y) */}
         <MPRPanel
           plane="coronal"
           label="Coronal (Y)"
@@ -331,11 +494,16 @@ const MPRViewer = ({
           crosshairV={coronalV}
           displayDim={{ width: nx, height: nz }}
           showCrosshairs={showCrosshairs}
+          markers={coronalMarkers}
+          showPlanningMarkers={showPlanningMarkers}
+          isAnnotationMode={isAnnotationMode}
+          selectedTarget={selectedTarget}
           onSliceChange={handleCoronalSliceChange}
           onPanelClick={handlePanelClick}
+          onSelectTarget={onSelectTarget}
         />
 
-        {/* Panel 3: Sagittal */}
+        {/* Panel 3: Sagittal (X) */}
         <MPRPanel
           plane="sagittal"
           label="Sagittal (X)"
@@ -346,8 +514,13 @@ const MPRViewer = ({
           crosshairV={sagittalV}
           displayDim={{ width: ny, height: nz }}
           showCrosshairs={showCrosshairs}
+          markers={sagittalMarkers}
+          showPlanningMarkers={showPlanningMarkers}
+          isAnnotationMode={isAnnotationMode}
+          selectedTarget={selectedTarget}
           onSliceChange={handleSagittalSliceChange}
           onPanelClick={handlePanelClick}
+          onSelectTarget={onSelectTarget}
         />
       </div>
 
@@ -380,6 +553,15 @@ const MPRViewer = ({
             {spacing[0]} × {spacing[1]} × {spacing[2]} mm
           </span>
         </div>
+
+        {planningTargets.length > 0 && (
+          <div className="mpr-status-item">
+            <span className="mpr-status-label">Active Targets:</span>
+            <span className="mpr-status-value">
+              {activeTargets.length} / {planningTargets.length}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

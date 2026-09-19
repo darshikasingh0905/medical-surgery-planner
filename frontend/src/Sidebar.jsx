@@ -62,6 +62,17 @@ const Sidebar = ({
   mprShowLesionOverlay = true,
   onMprPresetSelect,
   onToggleMprLesionOverlay,
+
+  // Day 17: Planning Targets & Markers layer
+  planningTargets = [],
+  targetVisibility = {},
+  onToggleTargetVisibility,
+  selectedTarget = null,
+  onSelectTarget,
+  onFocusTarget,
+  onDeleteTarget,
+  isAnnotationMode = false,
+  onToggleAnnotationMode,
 }) => {
   return (
     <div className="sidebar">
@@ -343,6 +354,124 @@ const Sidebar = ({
               );
             })}
           </ul>
+        </div>
+      )}
+
+      {/* ── Planning Targets & Markers Section (Planning View) ── */}
+      {isPlanningView && (
+        <div className="sidebar-section planning-targets-section">
+          <div className="planning-targets-header">
+            <h2 className="sidebar-heading sidebar-heading--planning">
+              Planning Targets
+              <span className="sidebar-count-badge">
+                {planningTargets.length}
+              </span>
+            </h2>
+            {onToggleAnnotationMode && (
+              <button
+                id="btn-sidebar-add-point"
+                className={`sidebar-add-point-btn ${isAnnotationMode ? 'active' : ''}`}
+                onClick={() => onToggleAnnotationMode(!isAnnotationMode)}
+                title={isAnnotationMode ? 'Exit point creation mode' : 'Enable click-to-annotate mode on CT slices'}
+                type="button"
+              >
+                {isAnnotationMode ? '✕ Mode Active' : '➕ Add Point'}
+              </button>
+            )}
+          </div>
+
+          {planningTargets.length === 0 ? (
+            <div className="planning-targets-empty">
+              No planning targets defined yet. Click "Add Point" to create one on the CT slices.
+            </div>
+          ) : (
+            <ul className="organ-list planning-targets-list" aria-label="Planning targets list">
+              {planningTargets.map((target) => {
+                const isModel = target.source === 'model';
+                const isVisible = targetVisibility[target.target_id] !== false;
+                const isSelected = selectedTarget?.target_id === target.target_id;
+                const badgeClass = isModel ? 'target-badge--model' : 'target-badge--user';
+                const badgeText = isModel ? 'MODEL FINDING' : 'USER ANNOTATION';
+                const markerColor = isModel ? '#00e5ff' : '#f59e0b';
+
+                return (
+                  <li
+                    key={target.target_id}
+                    className={`organ-item planning-target-item ${isSelected ? 'selected' : ''}`}
+                    onClick={() => onSelectTarget && onSelectTarget(target)}
+                    aria-selected={isSelected}
+                    role="option"
+                    tabIndex={0}
+                    id={`target-item-${target.target_id}`}
+                  >
+                    <span
+                      className="organ-color-swatch target-swatch"
+                      style={{ backgroundColor: markerColor, boxShadow: `0 0 6px ${markerColor}66` }}
+                      aria-hidden="true"
+                    />
+
+                    <div className="struct-name-col">
+                      <div className="target-title-row">
+                        <span className="organ-name target-name">{target.label}</span>
+                        <span className={`target-type-badge ${badgeClass}`}>{badgeText}</span>
+                      </div>
+                      <div className="target-coords-row">
+                        <span className="target-coords-text">
+                          Voxel: [{target.voxel_coordinate ? target.voxel_coordinate.join(', ') : '?'}]
+                        </span>
+                        {target.volume_ml != null && (
+                          <span className="target-volume-pill">{target.volume_ml.toFixed(2)} mL</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="struct-controls">
+                      <button
+                        id={`target-visibility-${target.target_id}`}
+                        className="visibility-toggle"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleTargetVisibility && onToggleTargetVisibility(target.target_id);
+                        }}
+                        title={isVisible ? 'Hide marker' : 'Show marker'}
+                        aria-label={isVisible ? 'Hide marker' : 'Show marker'}
+                      >
+                        {isVisible ? '👁️' : '👁️‍🗨️'}
+                      </button>
+
+                      <button
+                        id={`target-focus-${target.target_id}`}
+                        className="lesion-focus-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onFocusTarget && onFocusTarget(target);
+                        }}
+                        title="Focus camera and center MPR cursor on target"
+                        aria-label="Focus on target"
+                      >
+                        🎯
+                      </button>
+
+                      {!isModel && onDeleteTarget && (
+                        <button
+                          id={`target-delete-${target.target_id}`}
+                          className="target-delete-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteTarget(target.target_id);
+                          }}
+                          title="Delete user annotation"
+                          aria-label="Delete annotation"
+                        >
+                          🗑️
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
       )}
 

@@ -1,9 +1,9 @@
 # Project Progress Report: AI-Assisted Preoperative Planning System
 
-**Document Version:** 1.3  
-**Last Updated:** September 2026 (Day 15 Completed)  
+**Document Version:** 1.5  
+**Last Updated:** September 2026 (Day 17 Completed)  
 **Target Repository:** `medical-surgery-planner`  
-**Current Status:** Full-Stack Preoperative Planning Interface Active | Genuine KiTS2023 Model Active | Real CT Inference Validated | Anatomical Structure Registry Active | Computational Spatial Relationships Engine Active | Interactive Planning View Active | 65/65 Tests Passed
+**Current Status:** Full-Stack Preoperative Planning Interface Active | Multi-Planar Reconstruction (MPR) Synchronized | Surgical Planning Markers & Target Annotation Layer Active | Genuine KiTS2023 Model Active | Real CT Inference Validated | 152/152 Backend Tests Passed | Vite Build Clean (0 errors)
 
 
 ---
@@ -35,7 +35,9 @@ The system emphasizes **clinical safety, deterministic reproducibility, and stri
 | **Surgical Spatial Metrics Engine** | **Completed** | `scipy.spatial.cKDTree`, `nibabel` | Physical volume, bounding box, centroid, min Euclidean distances (mm) |
 | **Live 3D Lesion Visualization** | **Completed** | React 18, Three.js, R3F | Lesion mesh rendering, opacity slider, focus camera, distances in InfoPanel |
 | **Lesion REST API Endpoints** | **Completed** | FastAPI | `GET /lesions`, `GET /lesions/{id}` with cached + dynamic metrics |
-| **Automated Verification Suite** | **Active (100% Pass)** | `pytest` (49 tests) | 49 passed, 0 skipped, 0 failed |
+| **Multi-Planar Reconstruction (MPR)** | **Completed** | NumPy, Pillow, FastAPI | Sub-millisecond Axial/Coronal/Sagittal streaming, HU windowing, synchronized crosshairs |
+| **Planning Markers & Annotation Layer**| **Completed** | FastAPI, React, Three.js | Unified target model, atomic JSON persistence, 2D/3D synchronized markers, click-to-annotate UX |
+| **Automated Verification Suite** | **Active (100% Pass)** | `pytest` (152 tests) | 152 passed, 0 skipped, 0 failed |
 
 ---
 

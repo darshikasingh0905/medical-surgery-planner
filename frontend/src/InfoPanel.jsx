@@ -337,17 +337,99 @@ function LesionPanel({ lesion, relationships = [] }) {
   );
 }
 
-/** Main InfoPanel — Switches between Organ, Lesion, Structure, and Planning Summary views */
+/** Preoperative Planning Target Panel (Day 17) */
+function PlanningTargetPanel({ target }) {
+  const isModel = target.source === 'model';
+  const markerColor = isModel ? '#00e5ff' : '#f59e0b';
+  const badgeClass = isModel ? 'info-structure-badge--model' : 'info-structure-badge--user';
+  const badgeText = isModel ? 'MODEL FINDING' : 'USER ANNOTATION';
+
+  const phys = target.physical_coordinate;
+  const physStr = phys ? `(${phys[0].toFixed(1)}, ${phys[1].toFixed(1)}, ${phys[2].toFixed(1)}) mm` : 'Not computed';
+  const voxStr = target.voxel_coordinate ? `(${target.voxel_coordinate.join(', ')})` : 'Not available';
+
+  return (
+    <div className="info-panel info-panel--planning-target">
+      <h2 className="info-panel-heading">Surgical Planning Target</h2>
+      <div className="info-content">
+        <div className="info-organ-identity">
+          <span className="info-organ-swatch" style={{ backgroundColor: markerColor }} />
+          <h3 className="info-organ-name">{target.label}</h3>
+          <span className={`info-structure-badge ${badgeClass}`}>{badgeText}</span>
+        </div>
+
+        <div className="info-measurements">
+          <div className="info-measurement-item">
+            <span className="info-measurement-label">Target ID</span>
+            <span className="info-measurement-value">{target.target_id}</span>
+          </div>
+
+          <div className="info-measurement-item">
+            <span className="info-measurement-label">Voxel Coordinates</span>
+            <span className="info-measurement-value">{voxStr}</span>
+          </div>
+
+          <div className="info-measurement-item">
+            <span className="info-measurement-label">Physical Coordinates (RAS)</span>
+            <span className="info-measurement-value">{physStr}</span>
+          </div>
+
+          {target.volume_ml != null && (
+            <div className="info-measurement-item">
+              <span className="info-measurement-label">Estimated Volume</span>
+              <span className="info-measurement-value">{target.volume_ml.toFixed(4)} mL</span>
+            </div>
+          )}
+
+          {target.lesion_id && (
+            <div className="info-measurement-item">
+              <span className="info-measurement-label">Associated Lesion</span>
+              <span className="info-measurement-value">{target.lesion_id}</span>
+            </div>
+          )}
+
+          {target.structure_id && (
+            <div className="info-measurement-item">
+              <span className="info-measurement-label">Host Anatomy</span>
+              <span className="info-measurement-value">{target.structure_id.replace(/_/g, ' ')}</span>
+            </div>
+          )}
+
+          {target.notes && (
+            <div className="info-measurement-item" style={{ gridColumn: 'span 2' }}>
+              <span className="info-measurement-label">Planning Notes</span>
+              <span className="info-measurement-value">{target.notes}</span>
+            </div>
+          )}
+        </div>
+
+        <p className="note info-disclaimer-note">
+          <em>
+            Planning markers and computational coordinates are visualization aids. They do NOT constitute autonomous surgical plans or clinical operative advice.
+          </em>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Main InfoPanel — Switches between Organ, Lesion, Structure, Planning Target, and Planning Summary views */
 const InfoPanel = ({
   selectedOrgan,
   organResults,
   selectedLesion,
   selectedStructure,
+  selectedTarget,
   structures = [],
   lesions = [],
   relationships = [],
   isPlanningView = false,
 }) => {
+  // If a planning target is selected, display its spatial coordinates and provenance
+  if (selectedTarget) {
+    return <PlanningTargetPanel target={selectedTarget} />;
+  }
+
   // If a lesion is selected, always show its spatial metrics and relationships
   if (selectedLesion) {
     return <LesionPanel lesion={selectedLesion} relationships={relationships} />;
