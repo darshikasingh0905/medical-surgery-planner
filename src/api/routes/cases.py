@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, HTTPException, status, BackgroundTasks, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import shutil
@@ -270,5 +270,76 @@ async def get_lesion_spatial_relationships(case_id: str, lesion_id: str):
         json.dump(payload, f, indent=2)
         
     return payload
+
+
+@router.get("/{case_id}/mpr")
+async def get_case_mpr_metadata(case_id: str):
+    """
+    Retrieve volume metadata and plane dimensions for Multi-Planar Reconstruction (MPR).
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail="Case not found")
+        
+    from src.visualization.mpr import mpr_manager
+    try:
+        metadata = mpr_manager.get_metadata(case_id)
+        return metadata
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load CT volume metadata: {str(e)}")
+
+
+@router.get("/{case_id}/mpr/slice/{plane}/{index}")
+async def get_case_mpr_slice(
+    case_id: str,
+    plane: str,
+    index: int,
+    ww: float = 400.0,
+    wl: float = 40.0,
+    overlay_lesion: bool = True
+):
+    """
+    Retrieve an orthogonal 2D CT slice rendered with specified Window Width (ww)
+    and Window Level (wl) as an optimized PNG image.
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    plane_lower = plane.lower()
+    if plane_lower not in {"axial", "coronal", "sagittal"}:
+        raise HTTPException(status_code=400, detail=f"Invalid plane '{plane}'. Allowed: 'axial', 'coronal', 'sagittal'")
+
+    from src.visualization.mpr import mpr_manager
+    try:
+        meta = mpr_manager.get_metadata(case_id)
+        plane_info = meta["planes"].get(plane_lower)
+        total_slices = plane_info["total_slices"]
+        if index < 0 or index >= total_slices:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Slice index {index} out of range for plane '{plane}' (0 to {total_slices - 1})"
+            )
+
+        png_bytes = mpr_manager.get_slice_bytes(
+            case_id=case_id,
+            plane=plane_lower,
+            index=index,
+            window_width=ww,
+            window_level=wl,
+            overlay_lesion=overlay_lesion
+        )
+        return Response(
+            content=png_bytes,
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=3600"}
+        )
+    except HTTPException:
+        raise
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error extracting slice: {str(e)}")
+
 
 

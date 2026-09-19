@@ -133,4 +133,35 @@ export function getMeshUrl(caseId, organ) {
   return `${BASE_URL}/cases/${caseId}/meshes/${organ}`;
 }
 
+/**
+ * Retrieve volume metadata and plane dimensions for Multi-Planar Reconstruction (MPR).
+ *
+ * @param {string} caseId - The UUID of the case.
+ * @returns {Promise<{ case_id: string, shape: Array, voxel_spacing_mm: Array, planes: object, presets: object }>}
+ */
+export async function getCaseMPRMetadata(caseId) {
+  return apiFetch(`/cases/${caseId}/mpr`);
+}
+
+/**
+ * Build the URL for an orthogonal 2D CT slice PNG.
+ *
+ * @param {string} caseId - The UUID of the case.
+ * @param {string} plane - 'axial' | 'coronal' | 'sagittal'
+ * @param {number} index - Slice index
+ * @param {number} ww - Window Width
+ * @param {number} wl - Window Level
+ * @param {boolean} overlayLesion - Whether to blend genuine lesion mask overlay
+ * @returns {string} Relative URL for image tag
+ */
+export function getMPRSliceUrl(caseId, plane, index, ww = 400, wl = 40, overlayLesion = true) {
+  const params = new URLSearchParams({
+    ww: String(ww),
+    wl: String(wl),
+    overlay_lesion: String(overlayLesion),
+  });
+  return `${BASE_URL}/cases/${caseId}/mpr/slice/${plane}/${index}?${params.toString()}`;
+}
+
+
 

@@ -4,6 +4,7 @@ import Viewer3D from './Viewer3D';
 import InfoPanel from './InfoPanel';
 import UploadPanel from './UploadPanel';
 import StatusPanel from './StatusPanel';
+import MPRViewer from './MPRViewer';
 import { ORGAN_DATA } from './data';
 import {
   healthCheck,
@@ -14,6 +15,7 @@ import {
   getCaseStructures,
   getLesionRelationships,
   getMeshUrl,
+  getCaseMPRMetadata,
 } from './api';
 import './index.css';
 
@@ -83,6 +85,20 @@ function App() {
   const [organOpacity, setOrganOpacity] = useState(0.85);
   const [lesionOpacity, setLesionOpacity] = useState(1.0);
   const [organOpacities, setOrganOpacities] = useState({});
+
+  // ── MPR (Multi-Planar Reconstruction) state ────────────────────────────────
+  // viewMode: '3d' | 'mpr' | 'split'
+  const [viewMode, setViewMode] = useState('3d');
+  const [mprMetadata, setMprMetadata] = useState(null);
+  const [mprLoading, setMprLoading] = useState(false);
+  const [mprError, setMprError] = useState(null);
+  // Shared voxel cursor — synchronized across MPR planes and 3D focus
+  const [voxelCursor, setVoxelCursor] = useState([146, 146, 172]);
+  // MPR Window/Level state
+  const [mprWindowPreset, setMprWindowPreset] = useState('soft_tissue');
+  const [mprWindowWidth, setMprWindowWidth] = useState(400);
+  const [mprWindowLevel, setMprWindowLevel] = useState(40);
+  const [mprShowLesionOverlay, setMprShowLesionOverlay] = useState(true);
 
   // ── Polling ref ────────────────────────────────────────────────────────────
   const pollIntervalRef = useRef(null);
@@ -179,6 +195,23 @@ function App() {
                 setRelationships([]);
               }
             }
+
+            // 5. Fetch MPR metadata for the CT volume (Day 16)
+            setMprLoading(true);
+            setMprError(null);
+            try {
+              const mprData = await getCaseMPRMetadata(id);
+              setMprMetadata(mprData);
+              // Initialize voxel cursor to volume center from metadata
+              if (mprData.default_cursor && mprData.default_cursor.voxel) {
+                setVoxelCursor(mprData.default_cursor.voxel);
+              }
+            } catch (err) {
+              console.warn('MPR metadata not available:', err.message);
+              setMprError('MPR not available for this case.');
+            } finally {
+              setMprLoading(false);
+            }
           } else if (data.status === 'failed') {
             stopPolling();
             setAppState('failed');
@@ -244,6 +277,16 @@ function App() {
     setOrganOpacity(0.85);
     setLesionOpacity(1.0);
     setIsPlanningView(false);
+    // Reset MPR state
+    setViewMode('3d');
+    setMprMetadata(null);
+    setMprLoading(false);
+    setMprError(null);
+    setVoxelCursor([146, 146, 172]);
+    setMprWindowPreset('soft_tissue');
+    setMprWindowWidth(400);
+    setMprWindowLevel(40);
+    setMprShowLesionOverlay(true);
     setAppState('initial');
   }, [stopPolling]);
 
@@ -337,18 +380,45 @@ function App() {
 
     const host = lesion.lesion_id.includes('right') ? 'kidney_right' : 'kidney_left';
     setOrganOpacities({ [host]: 0.2 });
-  }, []);
+
+    // Also navigate MPR cursor to lesion centroid voxel if available
+    if (lesion.centroid_mm && mprMetadata) {
+      const spacing = mprMetadata.voxel_spacing_mm || [1.5, 1.5, 1.5];
+      const cx = Math.round(lesion.centroid_mm[0] / spacing[0]);
+      const cy = Math.round(lesion.centroid_mm[1] / spacing[1]);
+      const cz = Math.round(lesion.centroid_mm[2] / spacing[2]);
+      const shape = mprMetadata.shape;
+      const vx = Math.max(0, Math.min(cx, shape[0] - 1));
+      const vy = Math.max(0, Math.min(cy, shape[1] - 1));
+      const vz = Math.max(0, Math.min(cz, shape[2] - 1));
+      setVoxelCursor([vx, vy, vz]);
+    }
+  }, [mprMetadata]);
 
   // ── Reset camera view & opacities ──────────────────────────────────────────
   const handleResetCamera = useCallback(() => {
     setFocusedTarget(null);
     setOrganOpacities({});
-  }, []);
+    // Reset MPR cursor to volume center
+    if (mprMetadata && mprMetadata.default_cursor) {
+      setVoxelCursor(mprMetadata.default_cursor.voxel);
+    }
+  }, [mprMetadata]);
 
   // ── Camera transition done ────────────────────────────────────────────────
   const handleFocusDone = useCallback(() => {
     setFocusedTarget(null); // Clear trigger, preserve opacities
   }, []);
+
+  // ── MPR preset selection handler ────────────────────────────────────────────
+  const handleMprPresetSelect = useCallback((presetKey) => {
+    setMprWindowPreset(presetKey);
+    if (mprMetadata && mprMetadata.presets && mprMetadata.presets[presetKey]) {
+      const p = mprMetadata.presets[presetKey];
+      setMprWindowWidth(p.ww);
+      setMprWindowLevel(p.wl);
+    }
+  }, [mprMetadata]);
 
   // ── Build mesh URL map (organs + registered structures + lesions) ──────────
   const meshUrls = React.useMemo(() => {
@@ -497,23 +567,98 @@ function App() {
                 lesionOpacity={lesionOpacity}
                 onChangeLesionOpacity={setLesionOpacity}
                 onReset={handleReset}
+                viewMode={viewMode}
+                onSetViewMode={setViewMode}
+                mprMetadata={mprMetadata}
+                mprLoading={mprLoading}
+                mprError={mprError}
+                mprWindowPreset={mprWindowPreset}
+                mprWindowWidth={mprWindowWidth}
+                mprWindowLevel={mprWindowLevel}
+                mprShowLesionOverlay={mprShowLesionOverlay}
+                onMprPresetSelect={handleMprPresetSelect}
+                onToggleMprLesionOverlay={setMprShowLesionOverlay}
               />
             </aside>
 
             <main className="app-main">
-              <Viewer3D
-                visibility={combinedVisibility}
-                meshUrls={meshUrls}
-                lesions={lesions}
-                lesionVisibility={lesionVisibility}
-                lesionOpacity={lesionOpacity}
-                organOpacities={effectiveOrganOpacities}
-                selectedStructure={selectedStructure}
-                focusedTarget={focusedTarget}
-                isPlanningView={isPlanningView}
-                onFocusDone={handleFocusDone}
-                onResetCamera={handleResetCamera}
-              />
+              {/* ── 3D-only view ── */}
+              {viewMode === '3d' && (
+                <Viewer3D
+                  visibility={combinedVisibility}
+                  meshUrls={meshUrls}
+                  lesions={lesions}
+                  lesionVisibility={lesionVisibility}
+                  lesionOpacity={lesionOpacity}
+                  organOpacities={effectiveOrganOpacities}
+                  selectedStructure={selectedStructure}
+                  focusedTarget={focusedTarget}
+                  isPlanningView={isPlanningView}
+                  onFocusDone={handleFocusDone}
+                  onResetCamera={handleResetCamera}
+                />
+              )}
+
+              {/* ── MPR-only view ── */}
+              {viewMode === 'mpr' && (
+                <div className="mpr-full-view">
+                  <MPRViewer
+                    caseId={caseId}
+                    mprMetadata={mprMetadata}
+                    voxelCursor={voxelCursor}
+                    onCursorChange={setVoxelCursor}
+                    showLesionOverlay={mprShowLesionOverlay}
+                    onToggleLesionOverlay={setMprShowLesionOverlay}
+                    windowPreset={mprWindowPreset}
+                    windowWidth={mprWindowWidth}
+                    windowLevel={mprWindowLevel}
+                    onWindowChange={({ ww, wl }) => {
+                      setMprWindowWidth(ww);
+                      setMprWindowLevel(wl);
+                    }}
+                    onPresetSelect={handleMprPresetSelect}
+                  />
+                </div>
+              )}
+
+              {/* ── Split view: 3D (left) + MPR (right) ── */}
+              {viewMode === 'split' && (
+                <div className="split-view-container">
+                  <div className="split-view-3d">
+                    <Viewer3D
+                      visibility={combinedVisibility}
+                      meshUrls={meshUrls}
+                      lesions={lesions}
+                      lesionVisibility={lesionVisibility}
+                      lesionOpacity={lesionOpacity}
+                      organOpacities={effectiveOrganOpacities}
+                      selectedStructure={selectedStructure}
+                      focusedTarget={focusedTarget}
+                      isPlanningView={isPlanningView}
+                      onFocusDone={handleFocusDone}
+                      onResetCamera={handleResetCamera}
+                    />
+                  </div>
+                  <div className="split-view-mpr">
+                    <MPRViewer
+                      caseId={caseId}
+                      mprMetadata={mprMetadata}
+                      voxelCursor={voxelCursor}
+                      onCursorChange={setVoxelCursor}
+                      showLesionOverlay={mprShowLesionOverlay}
+                      onToggleLesionOverlay={setMprShowLesionOverlay}
+                      windowPreset={mprWindowPreset}
+                      windowWidth={mprWindowWidth}
+                      windowLevel={mprWindowLevel}
+                      onWindowChange={({ ww, wl }) => {
+                        setMprWindowWidth(ww);
+                        setMprWindowLevel(wl);
+                      }}
+                      onPresetSelect={handleMprPresetSelect}
+                    />
+                  </div>
+                </div>
+              )}
             </main>
           </div>
 

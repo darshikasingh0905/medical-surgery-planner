@@ -9,6 +9,10 @@ import { ORGAN_DATA, LESION_VISUAL_CONFIG, ANATOMICAL_STRUCTURE_STYLES } from '.
  *  - Controls structure visibility, highlighting, and camera focus
  *  - Displays explicit "Not available in this case" notice for non-segmented anatomy
  *  - Adjusts organ transparency and lesion opacity
+ *
+ * Day 16 additions:
+ *  - View mode switcher: 3D | MPR | Split
+ *  - MPR preset selector and lesion overlay toggle
  */
 const Sidebar = ({
   // Mode
@@ -45,10 +49,23 @@ const Sidebar = ({
 
   // Reset / Scan
   onReset,
+
+  // Day 16: MPR view mode controls
+  viewMode = '3d',
+  onSetViewMode,
+  mprMetadata = null,
+  mprLoading = false,
+  mprError = null,
+  mprWindowPreset = 'soft_tissue',
+  mprWindowWidth = 400,
+  mprWindowLevel = 40,
+  mprShowLesionOverlay = true,
+  onMprPresetSelect,
+  onToggleMprLesionOverlay,
 }) => {
   return (
     <div className="sidebar">
-      {/* ── View Mode Switcher ── */}
+      {/* ── View Mode Switcher (Standard vs Planning) ── */}
       <div className="sidebar-mode-switcher">
         <button
           id="btn-view-normal"
@@ -66,6 +83,40 @@ const Sidebar = ({
         >
           Planning View
         </button>
+      </div>
+
+      {/* ── MPR View Mode Switcher (Day 16) ── */}
+      <div className="sidebar-mpr-mode">
+        <span className="mpr-mode-label">Viewer:</span>
+        <div className="mpr-mode-tabs">
+          <button
+            id="btn-viewmode-3d"
+            className={`mpr-mode-tab ${viewMode === '3d' ? 'active' : ''}`}
+            onClick={() => onSetViewMode && onSetViewMode('3d')}
+            title="3D anatomical viewer"
+            type="button"
+          >
+            3D
+          </button>
+          <button
+            id="btn-viewmode-mpr"
+            className={`mpr-mode-tab ${viewMode === 'mpr' ? 'active' : ''}`}
+            onClick={() => onSetViewMode && onSetViewMode('mpr')}
+            title="Multi-Planar Reconstruction (Axial, Coronal, Sagittal)"
+            type="button"
+          >
+            MPR
+          </button>
+          <button
+            id="btn-viewmode-split"
+            className={`mpr-mode-tab ${viewMode === 'split' ? 'active' : ''}`}
+            onClick={() => onSetViewMode && onSetViewMode('split')}
+            title="Split view: 3D + MPR side-by-side"
+            type="button"
+          >
+            Split
+          </button>
+        </div>
       </div>
 
       {/* ── Planning View Header Banner ── */}
@@ -339,6 +390,82 @@ const Sidebar = ({
                 className="lesion-opacity-slider"
                 aria-label="Lesion opacity"
               />
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── MPR Controls Panel (visible in MPR and Split modes) ── */}
+      {(viewMode === 'mpr' || viewMode === 'split') && (
+        <div className="sidebar-section mpr-controls-section">
+          <h2 className="sidebar-heading sidebar-heading--mpr">MPR Controls</h2>
+
+          {mprLoading && (
+            <div className="mpr-sidebar-loading">
+              <span className="mpr-spinner-sm" />  Loading CT volume…
+            </div>
+          )}
+
+          {mprError && (
+            <div className="mpr-sidebar-error">{mprError}</div>
+          )}
+
+          {mprMetadata && !mprLoading && (
+            <>
+              {/* Window Presets */}
+              <div className="mpr-sidebar-presets">
+                <span className="mpr-sidebar-presets-label">Window Preset:</span>
+                <div className="mpr-sidebar-preset-pills">
+                  {Object.entries(mprMetadata.presets || {}).map(([key, defn]) => (
+                    <button
+                      key={key}
+                      id={`sidebar-preset-${key}`}
+                      className={`mpr-sidebar-preset-pill ${mprWindowPreset === key ? 'active' : ''}`}
+                      onClick={() => onMprPresetSelect && onMprPresetSelect(key)}
+                      type="button"
+                      title={`WW: ${defn.ww}, WL: ${defn.wl}`}
+                    >
+                      {defn.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* WW / WL readout */}
+              <div className="mpr-sidebar-wl-row">
+                <span className="mpr-sidebar-wl-item">
+                  <span className="mpr-sidebar-wl-label">WW:</span>
+                  <span className="mpr-sidebar-wl-val">{Math.round(mprWindowWidth)}</span>
+                </span>
+                <span className="mpr-sidebar-wl-item">
+                  <span className="mpr-sidebar-wl-label">WL:</span>
+                  <span className="mpr-sidebar-wl-val">{Math.round(mprWindowLevel)}</span>
+                </span>
+              </div>
+
+              {/* Lesion overlay toggle */}
+              <button
+                id="sidebar-mpr-lesion-overlay-toggle"
+                className={`mpr-sidebar-overlay-btn ${mprShowLesionOverlay ? 'active' : ''}`}
+                onClick={() => onToggleMprLesionOverlay && onToggleMprLesionOverlay(!mprShowLesionOverlay)}
+                type="button"
+              >
+                {mprShowLesionOverlay ? '🔬 Lesion Overlay On' : '🔬 Lesion Overlay Off'}
+              </button>
+
+              {/* Volume info */}
+              <div className="mpr-sidebar-vol-info">
+                <span className="mpr-sidebar-vol-label">Volume:</span>
+                <span className="mpr-sidebar-vol-val">
+                  {mprMetadata.shape[0]} × {mprMetadata.shape[1]} × {mprMetadata.shape[2]}
+                </span>
+              </div>
+              <div className="mpr-sidebar-vol-info">
+                <span className="mpr-sidebar-vol-label">Spacing:</span>
+                <span className="mpr-sidebar-vol-val">
+                  {mprMetadata.voxel_spacing_mm[0]} × {mprMetadata.voxel_spacing_mm[1]} × {mprMetadata.voxel_spacing_mm[2]} mm
+                </span>
+              </div>
             </>
           )}
         </div>

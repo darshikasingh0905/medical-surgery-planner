@@ -1414,3 +1414,555 @@ body {
   border-radius: 9999px;
 }
 
+
+/* ══════════════════════════════════════════════════════════════════
+   Day 16: MPR (Multi-Planar Reconstruction) Styles
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Sidebar: MPR View Mode Switcher ──────────────────────────── */
+.sidebar-mpr-mode {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1rem 0.35rem;
+  border-bottom: 1px solid var(--border-color);
+  background: #f8fafc;
+}
+
+.mpr-mode-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.mpr-mode-tabs {
+  display: flex;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.mpr-mode-tab {
+  flex: 1;
+  padding: 0.3rem 0.5rem;
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: white;
+  color: var(--text-light);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  text-align: center;
+}
+
+.mpr-mode-tab:hover {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+  background: var(--accent-light);
+}
+
+.mpr-mode-tab.active {
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+  color: white;
+  box-shadow: 0 2px 6px rgba(0, 102, 204, 0.3);
+}
+
+/* ── Sidebar: MPR Controls Section ───────────────────────────── */
+.mpr-controls-section {
+  border-top: 2px solid #0066cc20;
+  background: #f0f7ff;
+}
+
+.sidebar-heading--mpr {
+  color: #0052a3;
+  font-size: 0.72rem;
+  letter-spacing: 0.6px;
+}
+
+.mpr-sidebar-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-light);
+  padding: 0.4rem 0;
+}
+
+.mpr-spinner-sm {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #ccd9ea;
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.mpr-sidebar-error {
+  font-size: 0.78rem;
+  color: var(--danger-color);
+  background: var(--danger-light);
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid #fca5a5;
+}
+
+.mpr-sidebar-presets { margin-bottom: 0.55rem; }
+
+.mpr-sidebar-presets-label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  margin-bottom: 0.3rem;
+}
+
+.mpr-sidebar-preset-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.mpr-sidebar-preset-pill {
+  padding: 0.22rem 0.55rem;
+  border: 1.5px solid var(--border-color);
+  border-radius: 9999px;
+  background: white;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-light);
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+
+.mpr-sidebar-preset-pill:hover {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+.mpr-sidebar-preset-pill.active {
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+  color: white;
+}
+
+.mpr-sidebar-wl-row {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.mpr-sidebar-wl-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+}
+
+.mpr-sidebar-wl-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.mpr-sidebar-wl-val {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+}
+
+.mpr-sidebar-overlay-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 0.35rem 0.65rem;
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-light);
+  cursor: pointer;
+  margin-bottom: 0.5rem;
+  transition: all var(--transition);
+}
+
+.mpr-sidebar-overlay-btn.active {
+  background: #e0f0ff;
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+.mpr-sidebar-overlay-btn:hover { border-color: var(--accent-color); }
+
+.mpr-sidebar-vol-info {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  margin-bottom: 0.2rem;
+}
+
+.mpr-sidebar-vol-label {
+  font-weight: 700;
+  color: var(--text-muted);
+  min-width: 50px;
+}
+
+.mpr-sidebar-vol-val {
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── View Layout: Full MPR and Split Views ────────────────────── */
+.mpr-full-view {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background: #0a1628;
+  display: flex;
+  flex-direction: column;
+}
+
+.split-view-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  gap: 2px;
+  background: #0a1628;
+}
+
+.split-view-3d {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.split-view-mpr {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  overflow: auto;
+  background: #0d1f38;
+}
+
+/* ── MPR Viewer Container ─────────────────────────────────────── */
+.mpr-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #0d1f38;
+  color: #e2eaf5;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  overflow: hidden;
+}
+
+/* ── MPR Toolbar ──────────────────────────────────────────────── */
+.mpr-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: #0f2545;
+  border-bottom: 1px solid #1e3a5f;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.mpr-toolbar-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #7a9cc4;
+}
+
+.mpr-presets-group {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.mpr-preset-btn {
+  padding: 0.22rem 0.6rem;
+  border: 1.5px solid #2a4a70;
+  border-radius: 9999px;
+  background: transparent;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #7aaddc;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+
+.mpr-preset-btn:hover {
+  background: #1e3a5f;
+  border-color: #4a90c4;
+  color: #c4e0f8;
+}
+
+.mpr-preset-btn.active {
+  background: #1a73e8;
+  border-color: #1a73e8;
+  color: white;
+  box-shadow: 0 2px 8px rgba(26, 115, 232, 0.4);
+}
+
+.mpr-window-inputs {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.mpr-input-pill {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  background: #0f2545;
+  border: 1px solid #2a4a70;
+  border-radius: var(--radius-sm);
+  padding: 0.18rem 0.55rem;
+}
+
+.mpr-pill-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #7a9cc4;
+  text-transform: uppercase;
+}
+
+.mpr-pill-value {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #c4e0f8;
+  font-variant-numeric: tabular-nums;
+}
+
+.mpr-toggles-group {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.mpr-toggle-btn {
+  padding: 0.26rem 0.65rem;
+  border: 1.5px solid #2a4a70;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #7aaddc;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.mpr-toggle-btn:hover { background: #1e3a5f; }
+
+.mpr-toggle-btn.active {
+  background: #143a60;
+  border-color: #4a90c4;
+  color: #c4e0f8;
+}
+
+/* ── MPR Three-Panel Grid ─────────────────────────────────────── */
+.mpr-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: #0a1628;
+}
+
+/* ── Individual MPR Panel ─────────────────────────────────────── */
+.mpr-panel {
+  display: flex;
+  flex-direction: column;
+  background: #0d1f38;
+  overflow: hidden;
+}
+
+.mpr-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.3rem 0.65rem;
+  background: #0f2545;
+  border-bottom: 1px solid #1e3a5f;
+  flex-shrink: 0;
+}
+
+.mpr-plane-name {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #4fa8e0;
+}
+
+.mpr-slice-badge {
+  font-size: 0.67rem;
+  color: #5b7fa0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Slice Viewport ───────────────────────────────────────────── */
+.mpr-slice-viewport {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  cursor: crosshair;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mpr-slice-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  image-rendering: pixelated;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* ── Crosshair Overlay ────────────────────────────────────────── */
+.mpr-crosshair-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.mpr-crosshair-v {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(0, 229, 255, 0.7);
+  transform: translateX(-50%);
+}
+
+.mpr-crosshair-h {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(0, 229, 255, 0.7);
+  transform: translateY(-50%);
+}
+
+.mpr-crosshair-center {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(0, 229, 255, 0.9);
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 8px rgba(0, 229, 255, 0.6);
+}
+
+/* ── Slice Slider Bar ─────────────────────────────────────────── */
+.mpr-slider-bar {
+  padding: 0.25rem 0.5rem;
+  background: #0f2545;
+  border-top: 1px solid #1e3a5f;
+  flex-shrink: 0;
+}
+
+.mpr-slice-slider {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: #2a4a70;
+  outline: none;
+  cursor: pointer;
+}
+
+.mpr-slice-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #1a73e8;
+  border: 2px solid white;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  transition: background 0.15s;
+}
+
+.mpr-slice-slider::-webkit-slider-thumb:hover { background: #4a90e2; }
+
+/* ── MPR Status Bar ───────────────────────────────────────────── */
+.mpr-status-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  padding: 0.4rem 1rem;
+  background: #0f2545;
+  border-top: 1px solid #1e3a5f;
+  flex-shrink: 0;
+}
+
+.mpr-status-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.mpr-status-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #5b7fa0;
+}
+
+.mpr-status-value {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #c4e0f8;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── MPR Loading State ────────────────────────────────────────── */
+.mpr-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 1rem;
+  color: #7aaddc;
+  background: #0d1f38;
+}
+
+.mpr-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #1e3a5f;
+  border-top-color: #1a73e8;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
