@@ -509,3 +509,216 @@ async def create_annotation_from_lesion(
             status_code=500, detail=f"Error creating annotation from lesion: {str(e)}"
         )
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Preoperative Measurement Endpoints  (Day 18)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/{case_id}/planning/measurements")
+async def list_measurements(case_id: str):
+    """
+    List all preoperative geometric measurements for a case.
+
+    Returns MeasurementsResponse envelope including:
+      - total_measurements count
+      - list of Measurement objects with distance_mm, distance_cm, type, and coordinates
+      - clinical governance disclaimer
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+
+    from src.planning.measurement_service import measurement_service
+
+    try:
+        return measurement_service.build_measurements_response(case_id)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing measurements: {str(e)}")
+
+
+@router.post("/{case_id}/planning/measurements", status_code=201)
+async def create_point_to_point_measurement(case_id: str, payload: dict):
+    """
+    Create a point-to-point geometric measurement from two voxel coordinates.
+
+    Expected payload:
+      {
+        "start_voxel": [x, y, z],
+        "end_voxel": [x, y, z],
+        "label": "optional label",
+        "notes": "optional notes"
+      }
+
+    Returns the created Measurement object with physical distance in mm and cm.
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+
+    from src.planning.measurement_service import measurement_service
+    from src.planning.measurement_models import PointToPointRequest
+
+    try:
+        req = PointToPointRequest(**payload)
+        m = measurement_service.create_point_to_point_measurement(case_id, req)
+        return m
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating measurement: {str(e)}")
+
+
+@router.post("/{case_id}/planning/measurements/from-targets", status_code=201)
+async def create_target_to_target_measurement(case_id: str, payload: dict):
+    """
+    Create a target-to-target measurement between two planning targets.
+
+    Expected payload:
+      {
+        "source_target_id": "model_cyst_left",
+        "target_target_id": "ann_a1b2c3d4",
+        "label": "optional",
+        "notes": "optional"
+      }
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+
+    from src.planning.measurement_service import measurement_service
+    from src.planning.measurement_models import TargetToTargetRequest
+
+    try:
+        req = TargetToTargetRequest(**payload)
+        m = measurement_service.create_target_to_target_measurement(case_id, req)
+        return m
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating measurement: {str(e)}")
+
+
+@router.post("/{case_id}/planning/measurements/to-structure", status_code=201)
+async def create_target_to_structure_measurement(case_id: str, payload: dict):
+    """
+    Create a target-to-structure measurement.
+    Computes computational minimum distance from a planning target centroid
+    to the nearest foreground voxel of an anatomical structure mask.
+
+    Expected payload:
+      {
+        "target_id": "model_cyst_left",
+        "structure_id": "aorta",
+        "label": "optional",
+        "notes": "optional"
+      }
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+
+    from src.planning.measurement_service import measurement_service
+    from src.planning.measurement_models import TargetToStructureRequest
+
+    try:
+        req = TargetToStructureRequest(**payload)
+        m = measurement_service.create_target_to_structure_measurement(case_id, req)
+        return m
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating measurement: {str(e)}")
+
+
+@router.post("/{case_id}/planning/measurements/structure-to-structure", status_code=201)
+async def create_structure_to_structure_measurement(case_id: str, payload: dict):
+    """
+    Create a structure-to-structure measurement.
+    Computes computational minimum distance between two anatomical structure masks.
+
+    Expected payload:
+      {
+        "source_structure_id": "kidney_left",
+        "target_structure_id": "aorta",
+        "label": "optional",
+        "notes": "optional"
+      }
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+
+    from src.planning.measurement_service import measurement_service
+    from src.planning.measurement_models import StructureToStructureRequest
+
+    try:
+        req = StructureToStructureRequest(**payload)
+        m = measurement_service.create_structure_to_structure_measurement(case_id, req)
+        return m
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating measurement: {str(e)}")
+
+
+@router.get("/{case_id}/planning/measurements/{measurement_id}")
+async def get_measurement(case_id: str, measurement_id: str):
+    """
+    Retrieve a single preoperative measurement by ID.
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+
+    from src.planning.measurement_service import measurement_service
+
+    try:
+        m = measurement_service.get_measurement(case_id, measurement_id)
+        if m is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Measurement '{measurement_id}' not found in case '{case_id}'"
+            )
+        return m
+    except HTTPException:
+        raise
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving measurement: {str(e)}")
+
+
+@router.delete("/{case_id}/planning/measurements/{measurement_id}")
+async def delete_measurement(case_id: str, measurement_id: str):
+    """
+    Delete a preoperative measurement by ID.
+    This operation is isolated — deleting a measurement does NOT affect
+    planning annotations or any other planning data.
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+
+    from src.planning.measurement_service import measurement_service
+
+    try:
+        deleted = measurement_service.delete_measurement(case_id, measurement_id)
+        if not deleted:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Measurement '{measurement_id}' not found in case '{case_id}'"
+            )
+        return {
+            "status": "deleted",
+            "measurement_id": measurement_id,
+            "case_id": case_id
+        }
+    except HTTPException:
+        raise
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting measurement: {str(e)}")

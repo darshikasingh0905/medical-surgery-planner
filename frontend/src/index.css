@@ -2269,3 +2269,186 @@ body {
   border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
+/* ============================================================
+   Day 18: Preoperative Measurements & 3D Surgical Geometry
+   ============================================================ */
+
+/* ── Sidebar Measurements Header & Button ─────────────────────── */
+.sidebar-heading--measurements {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.measurement-mode-btn {
+  background: rgba(16, 185, 129, 0.12) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(52, 211, 153, 0.35) !important;
+  transition: all 0.2s ease-in-out;
+}
+
+.measurement-mode-btn:hover {
+  background: rgba(16, 185, 129, 0.25) !important;
+  border-color: #34d399 !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.35);
+}
+
+.measurement-mode-btn.active {
+  background: #059669 !important;
+  color: #ffffff !important;
+  border-color: #34d399 !important;
+  box-shadow: 0 0 10px rgba(52, 211, 153, 0.5);
+  animation: pulseMeasureBtn 1.8s infinite;
+}
+
+@keyframes pulseMeasureBtn {
+  0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.6); }
+  70% { box-shadow: 0 0 0 6px rgba(52, 211, 153, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+}
+
+/* ── Sidebar Measurement List & Items ─────────────────────────── */
+.measurements-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.measurement-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.65rem;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.measurement-item:hover {
+  background: rgba(30, 41, 59, 0.8);
+  border-color: rgba(52, 211, 153, 0.4);
+}
+
+.measurement-item.selected {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.25);
+}
+
+.measurement-type-pill {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  letter-spacing: 0.4px;
+}
+
+.measurement-name-col {
+  flex: 1;
+  min-width: 0;
+}
+
+.measurement-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.measurement-distance-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.15rem;
+}
+
+.measurement-dist-mm {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #34d399;
+  font-variant-numeric: tabular-nums;
+}
+
+.measurement-dist-cm {
+  font-size: 0.66rem;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+
+.measurement-overlap-badge {
+  font-size: 0.58rem;
+  font-weight: 700;
+  padding: 0.05rem 0.3rem;
+  border-radius: 2px;
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+/* ── MPR Measurement Banner ───────────────────────────────────── */
+.mpr-measurement-banner {
+  background: linear-gradient(135deg, rgba(6, 78, 59, 0.85), rgba(15, 23, 42, 0.95)) !important;
+  border: 1px solid #10b981 !important;
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.25);
+}
+
+.mpr-measurement-pulse {
+  background: #34d399 !important;
+  box-shadow: 0 0 8px #34d399 !important;
+}
+
+.mpr-measurement-point-a-badge {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  background: rgba(16, 185, 129, 0.25);
+  color: #a7f3d0;
+  padding: 0.15rem 0.5rem;
+  border-radius: 3px;
+  border: 1px solid rgba(52, 211, 153, 0.4);
+}
+
+/* ── InfoPanel Measurement Panel View ─────────────────────────── */
+.info-panel--measurement {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.info-structure-badge--measurement {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
+
+.highlight-metric {
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(52, 211, 153, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.65rem;
+  grid-column: span 2;
+}
+
+.measurement-hero-value {
+  font-size: 1.35rem !important;
+  font-weight: 800 !important;
+  color: #34d399 !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.5px;
+}
+
+.overlap-warn {
+  color: #f87171 !important;
+  font-weight: 700;
+}
+
+

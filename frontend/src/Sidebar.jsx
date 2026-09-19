@@ -73,6 +73,15 @@ const Sidebar = ({
   onDeleteTarget,
   isAnnotationMode = false,
   onToggleAnnotationMode,
+
+  // Day 18: Preoperative Measurements
+  measurements = [],
+  selectedMeasurement = null,
+  onSelectMeasurement,
+  onDeleteMeasurement,
+  onFocusMeasurement,
+  isMeasurementMode = false,
+  onToggleMeasurementMode,
 }) => {
   return (
     <div className="sidebar">
@@ -462,6 +471,107 @@ const Sidebar = ({
                           }}
                           title="Delete user annotation"
                           aria-label="Delete annotation"
+                        >
+                          🗑️
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {/* ── Preoperative Measurements Section (Planning View) ── */}
+      {isPlanningView && (
+        <div className="sidebar-section planning-targets-section">
+          <div className="planning-targets-header">
+            <h2 className="sidebar-heading sidebar-heading--measurements">
+              📏 Measurements
+              <span className="sidebar-count-badge">{measurements.length}</span>
+            </h2>
+            {onToggleMeasurementMode && (
+              <button
+                id="btn-sidebar-measure-distance"
+                className={`sidebar-add-point-btn measurement-mode-btn ${isMeasurementMode ? 'active' : ''}`}
+                onClick={() => {
+                  // Measurement mode is mutually exclusive with annotation mode — handled in App.jsx
+                  onToggleMeasurementMode(!isMeasurementMode);
+                }}
+                title={isMeasurementMode ? 'Exit measurement mode' : 'Click two points on CT slices to measure distance'}
+                type="button"
+              >
+                {isMeasurementMode ? '✕ Measuring…' : '📐 Measure Distance'}
+              </button>
+            )}
+          </div>
+
+          {measurements.length === 0 ? (
+            <div className="planning-targets-empty">
+              No measurements yet. Click "Measure Distance" to pick two points on CT slices.
+            </div>
+          ) : (
+            <ul className="organ-list planning-targets-list measurements-list" aria-label="Measurements list">
+              {measurements.map((m) => {
+                const isSelected = selectedMeasurement?.measurement_id === m.measurement_id;
+                const typeLabel = {
+                  point_to_point: 'P→P',
+                  target_to_target: 'T→T',
+                  target_to_structure: 'T→S',
+                  structure_to_structure: 'S→S',
+                  user_line: 'LINE',
+                }[m.measurement_type] || m.measurement_type;
+
+                return (
+                  <li
+                    key={m.measurement_id}
+                    className={`organ-item measurement-item ${isSelected ? 'selected' : ''}`}
+                    onClick={() => onSelectMeasurement && onSelectMeasurement(m)}
+                    aria-selected={isSelected}
+                    role="option"
+                    tabIndex={0}
+                    id={`measurement-item-${m.measurement_id}`}
+                  >
+                    <span className="measurement-type-pill">{typeLabel}</span>
+
+                    <div className="struct-name-col measurement-name-col">
+                      <span className="organ-name measurement-label" title={m.label}>{m.label}</span>
+                      <div className="measurement-distance-row">
+                        <span className="measurement-dist-mm">{m.distance_mm.toFixed(2)} mm</span>
+                        <span className="measurement-dist-cm">{m.distance_cm.toFixed(3)} cm</span>
+                        {m.overlap === true && (
+                          <span className="measurement-overlap-badge">OVERLAP</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="struct-controls">
+                      {onFocusMeasurement && m.start_voxel && (
+                        <button
+                          id={`measurement-focus-${m.measurement_id}`}
+                          className="lesion-focus-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onFocusMeasurement(m);
+                          }}
+                          title="Navigate MPR to measurement start point"
+                          aria-label="Focus on measurement"
+                        >
+                          🎯
+                        </button>
+                      )}
+                      {onDeleteMeasurement && (
+                        <button
+                          id={`measurement-delete-${m.measurement_id}`}
+                          className="target-delete-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteMeasurement(m.measurement_id);
+                          }}
+                          title="Delete measurement"
+                          aria-label="Delete measurement"
                         >
                           🗑️
                         </button>

@@ -413,18 +413,150 @@ function PlanningTargetPanel({ target }) {
   );
 }
 
-/** Main InfoPanel — Switches between Organ, Lesion, Structure, Planning Target, and Planning Summary views */
+/** Preoperative Measurement Panel (Day 18) */
+function MeasurementPanel({ measurement }) {
+  const typeBadgeText = {
+    point_to_point: 'Point-to-Point',
+    target_to_target: 'Target-to-Target',
+    target_to_structure: 'Target-to-Structure',
+    structure_to_structure: 'Structure-to-Structure',
+    user_line: 'User Line',
+  }[measurement.measurement_type] || measurement.measurement_type;
+
+  const startVoxStr = measurement.start_voxel ? `[${measurement.start_voxel.join(', ')}]` : 'N/A';
+  const endVoxStr = measurement.end_voxel ? `[${measurement.end_voxel.join(', ')}]` : 'N/A';
+  const startPhysStr = measurement.start_physical
+    ? `[${measurement.start_physical.map((v) => v.toFixed(1)).join(', ')}] mm`
+    : 'N/A';
+  const endPhysStr = measurement.end_physical
+    ? `[${measurement.end_physical.map((v) => v.toFixed(1)).join(', ')}] mm`
+    : 'N/A';
+
+  return (
+    <div className="info-panel info-panel--measurement">
+      <h2 className="info-panel-heading">Preoperative Measurement</h2>
+      <div className="info-content">
+        <div className="info-organ-identity">
+          <span className="info-organ-swatch" style={{ backgroundColor: '#10B981' }} />
+          <h3 className="info-organ-name">{measurement.label}</h3>
+          <span className="info-structure-badge info-structure-badge--measurement">{typeBadgeText}</span>
+        </div>
+
+        <div className="info-measurements">
+          <div className="info-measurement-item highlight-metric">
+            <span className="info-measurement-label">Physical Distance</span>
+            <span className="info-measurement-value measurement-hero-value">
+              {measurement.distance_mm.toFixed(2)} mm
+            </span>
+          </div>
+
+          <div className="info-measurement-item">
+            <span className="info-measurement-label">Metric (cm)</span>
+            <span className="info-measurement-value">
+              {measurement.distance_cm.toFixed(3)} cm
+            </span>
+          </div>
+
+          <div className="info-measurement-item">
+            <span className="info-measurement-label">Point A (Voxel)</span>
+            <span className="info-measurement-value">{startVoxStr}</span>
+          </div>
+
+          <div className="info-measurement-item">
+            <span className="info-measurement-label">Point A (Physical)</span>
+            <span className="info-measurement-value">{startPhysStr}</span>
+          </div>
+
+          <div className="info-measurement-item">
+            <span className="info-measurement-label">Point B (Voxel)</span>
+            <span className="info-measurement-value">{endVoxStr}</span>
+          </div>
+
+          <div className="info-measurement-item">
+            <span className="info-measurement-label">Point B (Physical)</span>
+            <span className="info-measurement-value">{endPhysStr}</span>
+          </div>
+
+          {measurement.overlap != null && (
+            <div className="info-measurement-item">
+              <span className="info-measurement-label">Anatomical Overlap</span>
+              <span className={`info-measurement-value ${measurement.overlap ? 'overlap-warn' : ''}`}>
+                {measurement.overlap ? '⚠️ Yes (Direct Contact)' : 'No (Separated)'}
+              </span>
+            </div>
+          )}
+
+          {measurement.source_structure_id && (
+            <div className="info-measurement-item">
+              <span className="info-measurement-label">Source Structure</span>
+              <span className="info-measurement-value">{measurement.source_structure_id.replace(/_/g, ' ')}</span>
+            </div>
+          )}
+
+          {measurement.target_structure_id && (
+            <div className="info-measurement-item">
+              <span className="info-measurement-label">Target Structure</span>
+              <span className="info-measurement-value">{measurement.target_structure_id.replace(/_/g, ' ')}</span>
+            </div>
+          )}
+
+          {measurement.source_target_id && (
+            <div className="info-measurement-item">
+              <span className="info-measurement-label">Source Target</span>
+              <span className="info-measurement-value">{measurement.source_target_id}</span>
+            </div>
+          )}
+
+          {measurement.target_target_id && (
+            <div className="info-measurement-item">
+              <span className="info-measurement-label">Target Target</span>
+              <span className="info-measurement-value">{measurement.target_target_id}</span>
+            </div>
+          )}
+
+          <div className="info-measurement-item">
+            <span className="info-measurement-label">Source Provenance</span>
+            <span className="info-measurement-value" style={{ textTransform: 'capitalize' }}>
+              {measurement.source}
+            </span>
+          </div>
+
+          {measurement.notes && (
+            <div className="info-measurement-item" style={{ gridColumn: 'span 2' }}>
+              <span className="info-measurement-label">Clinical Notes</span>
+              <span className="info-measurement-value">{measurement.notes}</span>
+            </div>
+          )}
+        </div>
+
+        <p className="note info-disclaimer-note">
+          <em>
+            Preoperative geometric measurements and computational distances represent physical Euclidean measurements between segmented structures or user-selected points. They do NOT represent autonomous surgical recommendations, clinical treatment decisions, safe surgical margins, recommended resection planes, or needle trajectories.
+          </em>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Main InfoPanel — Switches between Organ, Lesion, Structure, Planning Target, Measurement, and Planning Summary views */
 const InfoPanel = ({
   selectedOrgan,
   organResults,
   selectedLesion,
   selectedStructure,
   selectedTarget,
+  selectedMeasurement,
   structures = [],
   lesions = [],
   relationships = [],
   isPlanningView = false,
 }) => {
+  // If a measurement is selected, display its exact Euclidean metrics
+  if (selectedMeasurement) {
+    return <MeasurementPanel measurement={selectedMeasurement} />;
+  }
+
   // If a planning target is selected, display its spatial coordinates and provenance
   if (selectedTarget) {
     return <PlanningTargetPanel target={selectedTarget} />;

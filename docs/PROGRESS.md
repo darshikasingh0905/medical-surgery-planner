@@ -1,9 +1,9 @@
 # Project Progress Report: AI-Assisted Preoperative Planning System
 
-**Document Version:** 1.5  
-**Last Updated:** September 2026 (Day 17 Completed)  
+**Document Version:** 1.6  
+**Last Updated:** September 2026 (Day 18 Completed)  
 **Target Repository:** `medical-surgery-planner`  
-**Current Status:** Full-Stack Preoperative Planning Interface Active | Multi-Planar Reconstruction (MPR) Synchronized | Surgical Planning Markers & Target Annotation Layer Active | Genuine KiTS2023 Model Active | Real CT Inference Validated | 152/152 Backend Tests Passed | Vite Build Clean (0 errors)
+**Current Status:** Full-Stack Preoperative Planning Interface Active | Multi-Planar Reconstruction (MPR) Synchronized | Surgical Planning Markers Active | Preoperative Measurement & 3D Surgical Geometry Layer Active | Genuine KiTS2023 Model Active | Real CT Inference Validated | 166/166 Backend Tests Passed | Vite Build Clean (0 errors)
 
 
 ---
@@ -336,19 +336,33 @@ python -m pytest tests/ -v
 ### Documentation
 - [`docs/DAY15.md`](DAY15.md) — Full Day 15 milestone report
 - [`docs/PREOPERATIVE_PLANNING.md`](PREOPERATIVE_PLANNING.md) — Technical methodology and clinical governance
+- [`docs/DAY16.md`](DAY16.md) — Full Day 16 Multi-Planar Reconstruction (MPR) report
+- [`docs/DAY17.md`](DAY17.md) — Full Day 17 Surgical Target Annotation & Planning Marker report
+- [`docs/PLANNING_ANNOTATIONS.md`](PLANNING_ANNOTATIONS.md) — Planning targets architecture & governance
+- [`docs/DAY18.md`](DAY18.md) — Full Day 18 Preoperative Measurement & 3D Surgical Geometry report
+- [`docs/PREOPERATIVE_MEASUREMENTS.md`](PREOPERATIVE_MEASUREMENTS.md) — Preoperative geometry calculation & clinical safety guide
 
 ---
 
-## 8. Active Blockers & Next Steps
+## 8. Day 18 Milestone: Preoperative Measurement & 3D Surgical Geometry
+
+- **Architecture**: Complete quantitative physical Euclidean distance measurement layer between user points, surgical planning targets, and registered anatomical structure boundaries.
+- **Backend Service**: `MeasurementService` in `src/planning/measurement_service.py` with anisotropic voxel spacing calculation, boundary validation, and isolated atomic persistence to `outputs/cases/<case_id>/planning/measurements.json`.
+- **FastAPI Endpoints**: 6 dedicated REST endpoints under `/api/cases/{case_id}/planning/measurements`.
+- **2D/3D Synchronization**: Two-step MPR slice click workflow (Point A → Point B) with interactive banners, 3D line & endpoint sphere rendering in Three.js, camera navigation, and InfoPanel hero distance display.
+- **Quality Assurance**: 166/166 automated backend tests passing (100%), 14 new Day 18 tests, and Vite frontend build 100% clean with 0 errors.
+
+---
+
+## 9. Active Blockers & Next Steps
 
 ### Active Blockers:
 * **None**
 
-### Possible Day 16 Directions:
-1. Multi-planar reconstruction (MPR) 2D slice viewer (Axial, Coronal, Sagittal) synchronized with 3D cursor
-2. Automated PDF surgical planning case report generation
+### Future Directions:
+1. Automated PDF surgical planning case report generation with embedded MPR slice captures and quantitative clearance tables
+2. Multi-point surgical polyline / resection boundary estimation and curved-planar reformation (CPR)
 3. Specialized vascular sub-segmentation integration (e.g. TotalSegmentator tissue/vessel models)
-
 
 ---
 

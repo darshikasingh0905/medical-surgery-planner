@@ -165,6 +165,75 @@ const PlanningMarker3D = ({ target, selected = false, onSelect }) => {
 };
 
 /**
+ * Measurement3D — Renders a 3D preoperative measurement line with endpoint spheres (Day 18).
+ */
+const Measurement3D = ({ measurement, selected = false, onSelect }) => {
+  const p1 = measurement.start_physical;
+  const p2 = measurement.end_physical;
+  if (!p1 || !p2 || p1.length !== 3 || p2.length !== 3) return null;
+
+  const v1 = useMemo(() => new THREE.Vector3(p1[0], p1[1], p1[2]), [p1]);
+  const v2 = useMemo(() => new THREE.Vector3(p2[0], p2[1], p2[2]), [p2]);
+
+  const { midpoint, length, orientation } = useMemo(() => {
+    const mid = new THREE.Vector3().addVectors(v1, v2).multiplyScalar(0.5);
+    const dist = v1.distanceTo(v2);
+    const dir = new THREE.Vector3().subVectors(v2, v1).normalize();
+    const up = new THREE.Vector3(0, 1, 0);
+    const quat = new THREE.Quaternion().setFromUnitVectors(up, dir);
+    return { midpoint: mid, length: dist, orientation: quat };
+  }, [v1, v2]);
+
+  const lineColor = selected ? '#38BDF8' : '#34D399';
+  const sphereRadius = selected ? 3.2 : 2.2;
+  const cylinderRadius = selected ? 1.0 : 0.6;
+
+  return (
+    <group
+      onClick={(e) => {
+        e.stopPropagation();
+        if (onSelect) onSelect(measurement);
+      }}
+    >
+      {/* Endpoint A sphere */}
+      <mesh position={p1}>
+        <sphereGeometry args={[sphereRadius, 16, 16]} />
+        <meshStandardMaterial
+          color="#10B981"
+          emissive="#10B981"
+          emissiveIntensity={selected ? 0.9 : 0.5}
+          roughness={0.2}
+        />
+      </mesh>
+
+      {/* Endpoint B sphere */}
+      <mesh position={p2}>
+        <sphereGeometry args={[sphereRadius, 16, 16]} />
+        <meshStandardMaterial
+          color="#F59E0B"
+          emissive="#F59E0B"
+          emissiveIntensity={selected ? 0.9 : 0.5}
+          roughness={0.2}
+        />
+      </mesh>
+
+      {/* Connecting 3D cylinder */}
+      {length > 0.001 && (
+        <mesh position={midpoint} quaternion={orientation}>
+          <cylinderGeometry args={[cylinderRadius, cylinderRadius, length, 12]} />
+          <meshStandardMaterial
+            color={lineColor}
+            emissive={lineColor}
+            emissiveIntensity={selected ? 0.8 : 0.4}
+            roughness={0.3}
+          />
+        </mesh>
+      )}
+    </group>
+  );
+};
+
+/**
  * CameraController — Smoothly animates camera focus to target position or resets to home.
  */
 function CameraController({ focusTarget, resetTrigger, onFocusDone }) {
@@ -283,6 +352,10 @@ const Viewer3D = ({
   targetVisibility = {},
   selectedTarget = null,
   onSelectTarget,
+  // Preoperative Measurements Layer (Day 18)
+  measurements = [],
+  selectedMeasurement = null,
+  onSelectMeasurement,
   onFocusDone,
   onResetCamera,
 }) => {
@@ -293,13 +366,28 @@ const Viewer3D = ({
     setCenters((prev) => ({ ...prev, [id]: centerCoords }));
   }, []);
 
-  // Compute camera target based on focusedTarget (planning target, lesion, structure id, or explicit coordinates)
+  // Compute camera target based on focusedTarget (planning target, measurement, lesion, structure id, or explicit coordinates)
   const computedFocusTarget = useMemo(() => {
     if (!focusedTarget) return null;
 
     // Direct [x, y, z] coordinates
     if (Array.isArray(focusedTarget) && focusedTarget.length === 3) {
       return focusedTarget;
+    }
+
+    // Measurement with start_physical and end_physical
+    if (
+      focusedTarget.start_physical &&
+      Array.isArray(focusedTarget.start_physical) &&
+      focusedTarget.end_physical &&
+      Array.isArray(focusedTarget.end_physical)
+    ) {
+      const p1 = focusedTarget.start_physical;
+      const p2 = focusedTarget.end_physical;
+      const midX = (p1[0] + p2[0]) / 2;
+      const midY = (p1[1] + p2[1]) / 2;
+      const midZ = (p1[2] + p2[2]) / 2;
+      return [midX, midZ, -midY];
     }
 
     // Planning target with physical_coordinate
@@ -428,6 +516,19 @@ const Viewer3D = ({
                     target={target}
                     selected={isSelected}
                     onSelect={onSelectTarget}
+                  />
+                );
+              })}
+
+              {/* ── Preoperative Measurements (Day 18) ── */}
+              {measurements.map((m) => {
+                const isSelected = selectedMeasurement?.measurement_id === m.measurement_id;
+                return (
+                  <Measurement3D
+                    key={m.measurement_id}
+                    measurement={m}
+                    selected={isSelected}
+                    onSelect={onSelectMeasurement}
                   />
                 );
               })}

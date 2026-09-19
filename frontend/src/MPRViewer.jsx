@@ -215,6 +215,11 @@ const MPRViewer = ({
   isAnnotationMode = false,
   onToggleAnnotationMode,
   onAddPlanningPoint,
+  // Preoperative Measurement Mode (Day 18)
+  isMeasurementMode = false,
+  measurementStep = null,         // 'pick_start' | 'pick_end'
+  measurementDraftStart = null,   // voxel coord of Point A
+  onMeasurementPointPick,
 }) => {
   const [showCrosshairs, setShowCrosshairs] = useState(true);
   const [showPlanningMarkers, setShowPlanningMarkers] = useState(true);
@@ -356,6 +361,12 @@ const MPRViewer = ({
 
     onCursorChange(newVoxel);
 
+    // If measurement mode is active, route to measurement pick workflow
+    if (isMeasurementMode && onMeasurementPointPick) {
+      onMeasurementPointPick(newVoxel);
+      return;
+    }
+
     // If explicit annotation mode is active, trigger planning point creation
     if (isAnnotationMode && onAddPlanningPoint) {
       onAddPlanningPoint(newVoxel);
@@ -458,6 +469,25 @@ const MPRViewer = ({
           >
             ✕ Exit Mode
           </button>
+        </div>
+      )}
+
+      {/* ── Active Measurement Mode Banner ── */}
+      {isMeasurementMode && (
+        <div className="mpr-annotation-banner mpr-measurement-banner" id="mpr-measurement-banner">
+          <span className="mpr-annotation-pulse mpr-measurement-pulse" />
+          <span className="mpr-annotation-text">
+            {measurementStep === 'pick_start' ? (
+              <><strong>📐 Measure Distance:</strong> Click Point A on any CT slice to begin. Point A → ...</>  
+            ) : (
+              <><strong>📐 Measure Distance:</strong> Point A selected. Now click Point B to complete the measurement.</>  
+            )}
+          </span>
+          {measurementDraftStart && (
+            <span className="mpr-measurement-point-a-badge">
+              A: [{measurementDraftStart.join(', ')}]
+            </span>
+          )}
         </div>
       )}
 

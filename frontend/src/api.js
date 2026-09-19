@@ -243,6 +243,89 @@ export async function createAnnotationFromLesion(caseId, lesionId, payload = {})
   });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Preoperative Measurements API (Day 18)
+// ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * List all preoperative geometric measurements for a case.
+ *
+ * @param {string} caseId - Case UUID.
+ * @returns {Promise<{ case_id, total_measurements, measurements, safety_disclaimer }>}
+ */
+export async function getPlanningMeasurements(caseId) {
+  return apiFetch(`/cases/${caseId}/planning/measurements`);
+}
 
+/**
+ * Create a point-to-point geometric measurement from two CT voxel coordinates.
+ *
+ * @param {string} caseId - Case UUID.
+ * @param {{ start_voxel: number[], end_voxel: number[], label?: string, notes?: string }} payload
+ * @returns {Promise<object>} Created Measurement
+ */
+export async function createPointToPointMeasurement(caseId, payload) {
+  return apiFetch(`/cases/${caseId}/planning/measurements`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
 
+/**
+ * Create a target-to-target measurement between two planning targets.
+ *
+ * @param {string} caseId - Case UUID.
+ * @param {{ source_target_id: string, target_target_id: string, label?: string, notes?: string }} payload
+ * @returns {Promise<object>} Created Measurement
+ */
+export async function createTargetToTargetMeasurement(caseId, payload) {
+  return apiFetch(`/cases/${caseId}/planning/measurements/from-targets`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Create a target-to-structure measurement (planning target → anatomical structure mask).
+ *
+ * @param {string} caseId - Case UUID.
+ * @param {{ target_id: string, structure_id: string, label?: string, notes?: string }} payload
+ * @returns {Promise<object>} Created Measurement
+ */
+export async function createTargetToStructureMeasurement(caseId, payload) {
+  return apiFetch(`/cases/${caseId}/planning/measurements/to-structure`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Create a structure-to-structure measurement (anatomical mask ↔ anatomical mask).
+ *
+ * @param {string} caseId - Case UUID.
+ * @param {{ source_structure_id: string, target_structure_id: string, label?: string, notes?: string }} payload
+ * @returns {Promise<object>} Created Measurement
+ */
+export async function createStructureToStructureMeasurement(caseId, payload) {
+  return apiFetch(`/cases/${caseId}/planning/measurements/structure-to-structure`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Delete a preoperative measurement by ID.
+ *
+ * @param {string} caseId - Case UUID.
+ * @param {string} measurementId - Measurement ID to delete.
+ * @returns {Promise<{ status: string, measurement_id: string, case_id: string }>}
+ */
+export async function deletePlanningMeasurement(caseId, measurementId) {
+  return apiFetch(`/cases/${caseId}/planning/measurements/${measurementId}`, {
+    method: 'DELETE',
+  });
+}

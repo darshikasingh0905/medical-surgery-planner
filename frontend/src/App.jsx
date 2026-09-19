@@ -19,6 +19,9 @@ import {
   getPlanningTargets,
   createPlanningAnnotation,
   deletePlanningAnnotation,
+  getPlanningMeasurements,
+  createPointToPointMeasurement,
+  deletePlanningMeasurement,
 } from './api';
 import './index.css';
 
@@ -108,6 +111,14 @@ function App() {
   const [targetVisibility, setTargetVisibility] = useState({});
   const [selectedTarget, setSelectedTarget] = useState(null);
   const [isAnnotationMode, setIsAnnotationMode] = useState(false);
+
+  // ── Preoperative Measurements state (Day 18) ───────────────────────────────
+  const [measurements, setMeasurements] = useState([]);
+  const [selectedMeasurement, setSelectedMeasurement] = useState(null);
+  const [isMeasurementMode, setIsMeasurementMode] = useState(false);
+  // Two-step point-pick workflow: null | 'pick_start' | 'pick_end'
+  const [measurementStep, setMeasurementStep] = useState(null);
+  const [measurementDraftStart, setMeasurementDraftStart] = useState(null);
 
   // ── Polling ref ────────────────────────────────────────────────────────────
   const pollIntervalRef = useRef(null);
@@ -236,6 +247,15 @@ function App() {
               console.warn('Planning targets not available:', err.message);
               setPlanningTargets([]);
             }
+
+            // 7. Fetch preoperative measurements (Day 18)
+            try {
+              const measData = await getPlanningMeasurements(id);
+              setMeasurements(measData.measurements ?? []);
+            } catch (err) {
+              // Fresh case will have 0 measurements — not an error
+              setMeasurements([]);
+            }
           } else if (data.status === 'failed') {
             stopPolling();
             setAppState('failed');
@@ -315,6 +335,12 @@ function App() {
     setTargetVisibility({});
     setSelectedTarget(null);
     setIsAnnotationMode(false);
+    // Reset measurement state
+    setMeasurements([]);
+    setSelectedMeasurement(null);
+    setIsMeasurementMode(false);
+    setMeasurementStep(null);
+    setMeasurementDraftStart(null);
     setAppState('initial');
   }, [stopPolling]);
 
@@ -502,6 +528,81 @@ function App() {
     }
   }, [caseId, planningTargets]);
 
+  // ── Measurement Mode Handlers (Day 18) ──────────────────────────────
+
+  // Toggle measurement mode (mutually exclusive with annotation mode)
+  const handleToggleMeasurementMode = useCallback((enable) => {
+    if (enable) {
+      setIsAnnotationMode(false); // Disengage annotation mode
+      setIsMeasurementMode(true);
+      setMeasurementStep('pick_start');
+      setMeasurementDraftStart(null);
+    } else {
+      setIsMeasurementMode(false);
+      setMeasurementStep(null);
+      setMeasurementDraftStart(null);
+    }
+  }, []);
+
+  // Called by MPRViewer when user clicks a CT voxel during measurement mode
+  const handleMeasurementPointPick = useCallback(
+    async (voxelCoord) => {
+      if (!isMeasurementMode || !caseId) return;
+
+      if (measurementStep === 'pick_start') {
+        // Store Point A and advance to picking Point B
+        setMeasurementDraftStart(voxelCoord);
+        setMeasurementStep('pick_end');
+      } else if (measurementStep === 'pick_end' && measurementDraftStart) {
+        // Both points selected — call backend to create measurement
+        try {
+          const created = await createPointToPointMeasurement(caseId, {
+            start_voxel: measurementDraftStart,
+            end_voxel: voxelCoord,
+          });
+          setMeasurements((prev) => [...prev, created]);
+          setSelectedMeasurement(created);
+        } catch (err) {
+          console.error('Failed to create measurement:', err);
+        } finally {
+          // Reset to allow another measurement
+          setMeasurementStep('pick_start');
+          setMeasurementDraftStart(null);
+        }
+      }
+    },
+    [isMeasurementMode, measurementStep, measurementDraftStart, caseId]
+  );
+
+  const handleSelectMeasurement = useCallback((m) => {
+    setSelectedMeasurement(m);
+    setFocusedTarget(m);
+    if (m.start_voxel) {
+      setVoxelCursor(m.start_voxel);
+    }
+  }, []);
+
+  const handleFocusMeasurement = useCallback((m) => {
+    setSelectedMeasurement(m);
+    setFocusedTarget(m);
+    if (m.start_voxel) {
+      setVoxelCursor(m.start_voxel);
+    }
+  }, []);
+
+  const handleDeleteMeasurement = useCallback(async (measurementId) => {
+    if (!caseId) return;
+    try {
+      await deletePlanningMeasurement(caseId, measurementId);
+      setMeasurements((prev) => prev.filter((m) => m.measurement_id !== measurementId));
+      if (selectedMeasurement?.measurement_id === measurementId) {
+        setSelectedMeasurement(null);
+      }
+    } catch (err) {
+      console.error('Failed to delete measurement:', err);
+    }
+  }, [caseId, selectedMeasurement]);
+
   // ── Build mesh URL map (organs + registered structures + lesions) ──────────
   const meshUrls = React.useMemo(() => {
     if (!caseId || appState !== 'completed') return null;
@@ -668,7 +769,17 @@ function App() {
                 onFocusTarget={handleFocusTarget}
                 onDeleteTarget={handleDeleteTarget}
                 isAnnotationMode={isAnnotationMode}
-                onToggleAnnotationMode={setIsAnnotationMode}
+                onToggleAnnotationMode={(v) => {
+                  if (v) setIsMeasurementMode(false); // disengage measure mode
+                  setIsAnnotationMode(v);
+                }}
+                measurements={measurements}
+                selectedMeasurement={selectedMeasurement}
+                onSelectMeasurement={handleSelectMeasurement}
+                onDeleteMeasurement={handleDeleteMeasurement}
+                onFocusMeasurement={handleFocusMeasurement}
+                isMeasurementMode={isMeasurementMode}
+                onToggleMeasurementMode={handleToggleMeasurementMode}
               />
             </aside>
 
@@ -689,6 +800,9 @@ function App() {
                   targetVisibility={targetVisibility}
                   selectedTarget={selectedTarget}
                   onSelectTarget={handleSelectTarget}
+                  measurements={measurements}
+                  selectedMeasurement={selectedMeasurement}
+                  onSelectMeasurement={handleSelectMeasurement}
                   onFocusDone={handleFocusDone}
                   onResetCamera={handleResetCamera}
                 />
@@ -717,8 +831,15 @@ function App() {
                     selectedTarget={selectedTarget}
                     onSelectTarget={handleSelectTarget}
                     isAnnotationMode={isAnnotationMode}
-                    onToggleAnnotationMode={setIsAnnotationMode}
+                    onToggleAnnotationMode={(v) => {
+                      if (v) setIsMeasurementMode(false);
+                      setIsAnnotationMode(v);
+                    }}
                     onAddPlanningPoint={handleAddPlanningPoint}
+                    isMeasurementMode={isMeasurementMode}
+                    measurementStep={measurementStep}
+                    measurementDraftStart={measurementDraftStart}
+                    onMeasurementPointPick={handleMeasurementPointPick}
                   />
                 </div>
               )}
@@ -741,6 +862,9 @@ function App() {
                       targetVisibility={targetVisibility}
                       selectedTarget={selectedTarget}
                       onSelectTarget={handleSelectTarget}
+                      measurements={measurements}
+                      selectedMeasurement={selectedMeasurement}
+                      onSelectMeasurement={handleSelectMeasurement}
                       onFocusDone={handleFocusDone}
                       onResetCamera={handleResetCamera}
                     />
@@ -766,8 +890,15 @@ function App() {
                       selectedTarget={selectedTarget}
                       onSelectTarget={handleSelectTarget}
                       isAnnotationMode={isAnnotationMode}
-                      onToggleAnnotationMode={setIsAnnotationMode}
+                      onToggleAnnotationMode={(v) => {
+                        if (v) setIsMeasurementMode(false);
+                        setIsAnnotationMode(v);
+                      }}
                       onAddPlanningPoint={handleAddPlanningPoint}
+                      isMeasurementMode={isMeasurementMode}
+                      measurementStep={measurementStep}
+                      measurementDraftStart={measurementDraftStart}
+                      onMeasurementPointPick={handleMeasurementPointPick}
                     />
                   </div>
                 </div>
@@ -782,6 +913,7 @@ function App() {
               selectedLesion={selectedLesion}
               selectedStructure={selectedStructure}
               selectedTarget={selectedTarget}
+              selectedMeasurement={selectedMeasurement}
               structures={structures}
               lesions={lesions}
               relationships={relationships}
