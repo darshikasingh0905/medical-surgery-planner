@@ -82,10 +82,11 @@ const Sidebar = ({
   onFocusMeasurement,
   isMeasurementMode = false,
   onToggleMeasurementMode,
+  onOpenWorkspace,
 }) => {
   return (
     <div className="sidebar">
-      {/* ── View Mode Switcher (Standard vs Planning) ── */}
+      {/* ── View Mode Switcher (Standard vs Planning vs Workspace) ── */}
       <div className="sidebar-mode-switcher">
         <button
           id="btn-view-normal"
@@ -103,6 +104,17 @@ const Sidebar = ({
         >
           Planning View
         </button>
+        {onOpenWorkspace && (
+          <button
+            id="btn-sidebar-open-workspace"
+            className="mode-tab-btn mode-tab-btn--workspace"
+            onClick={onOpenWorkspace}
+            type="button"
+            title="Open dedicated Preoperative Planning Workspace"
+          >
+            ⚡ Workspace
+          </button>
+        )}
       </div>
 
       {/* ── MPR View Mode Switcher (Day 16) ── */}

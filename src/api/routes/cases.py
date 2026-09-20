@@ -722,3 +722,92 @@ async def delete_measurement(case_id: str, measurement_id: str):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting measurement: {str(e)}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Preoperative Planning Workspace Endpoints (Day 20)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/{case_id}/planning/summary")
+async def get_planning_summary(case_id: str):
+    """
+    Retrieve the comprehensive Preoperative Planning Summary for a case.
+    Aggregates CT metadata, model findings, anatomy, spatial clearances,
+    measurements, targets, and active session state.
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+
+    from src.planning.planning_summary import planning_summary_service
+
+    try:
+        return planning_summary_service.get_planning_summary(case_id)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving planning summary: {str(e)}")
+
+
+@router.get("/{case_id}/planning/session")
+async def get_planning_session(case_id: str):
+    """
+    Retrieve the active planning session state for a case.
+    Initializes default session if none exists.
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+
+    from src.planning.planning_session import planning_session_service
+
+    try:
+        return planning_session_service.get_session(case_id)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving planning session: {str(e)}")
+
+
+@router.post("/{case_id}/planning/session", status_code=200)
+async def create_or_reset_planning_session(case_id: str, payload: dict | None = None):
+    """
+    Create or reset the planning session state for a case.
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+
+    from src.planning.planning_session import planning_session_service
+
+    try:
+        session = planning_session_service.reset_session(case_id)
+        if payload:
+            session = planning_session_service.update_session(case_id, payload)
+        return session
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error initializing planning session: {str(e)}")
+
+
+@router.put("/{case_id}/planning/session")
+async def update_planning_session(case_id: str, payload: dict):
+    """
+    Update the planning session state for a case (view mode, cursor, notes, selections, etc.).
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+
+    from src.planning.planning_session import planning_session_service, PlanningSessionUpdateRequest
+
+    try:
+        req = PlanningSessionUpdateRequest(**payload)
+        updated = planning_session_service.update_session(case_id, req)
+        return updated
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating planning session: {str(e)}")
+

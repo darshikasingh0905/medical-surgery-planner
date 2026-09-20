@@ -5,6 +5,7 @@ import InfoPanel from './InfoPanel';
 import UploadPanel from './UploadPanel';
 import StatusPanel from './StatusPanel';
 import MPRViewer from './MPRViewer';
+import PlanningWorkspace from './PlanningWorkspace';
 import { ORGAN_DATA } from './data';
 import {
   healthCheck,
@@ -70,6 +71,8 @@ function App() {
 
   // ── View mode: Standard Normal View vs Preoperative Planning View ──────────
   const [isPlanningView, setIsPlanningView] = useState(false);
+  // Dedicated Preoperative Planning Workspace state (Day 20)
+  const [isWorkspaceMode, setIsWorkspaceMode] = useState(false);
 
   // ── Viewer state ───────────────────────────────────────────────────────────
   const [selectedOrgan, setSelectedOrgan] = useState(null);
@@ -684,14 +687,24 @@ function App() {
             )}
 
             {!showUpload && (
-              <button
-                id="upload-new-scan-button"
-                className="btn-new-scan"
-                onClick={handleReset}
-                title="Upload a new scan"
-              >
-                ↩ New Scan
-              </button>
+              <div className="header-actions">
+                <button
+                  id="btn-open-workspace"
+                  className={`btn-workspace-toggle ${isWorkspaceMode ? 'active' : ''}`}
+                  onClick={() => setIsWorkspaceMode(!isWorkspaceMode)}
+                  title="Toggle dedicated Preoperative Planning Workspace"
+                >
+                  {isWorkspaceMode ? '🗂️ Standard View' : '⚡ Planning Workspace'}
+                </button>
+                <button
+                  id="upload-new-scan-button"
+                  className="btn-new-scan"
+                  onClick={handleReset}
+                  title="Upload a new scan"
+                >
+                  ↩ New Scan
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -722,13 +735,61 @@ function App() {
       )}
 
       {/* ── Main Viewer (completed state) ── */}
-      {showViewer && (
+      {showViewer && isWorkspaceMode && (
+        <PlanningWorkspace
+          caseId={caseId}
+          onExitWorkspace={() => setIsWorkspaceMode(false)}
+          meshUrls={meshUrls}
+          lesions={lesions}
+          structures={structures}
+          relationships={relationships}
+          planningTargets={planningTargets}
+          setPlanningTargets={setPlanningTargets}
+          measurements={measurements}
+          setMeasurements={setMeasurements}
+          mprMetadata={mprMetadata}
+          voxelCursor={voxelCursor}
+          setVoxelCursor={setVoxelCursor}
+          visibility={combinedVisibility}
+          setVisibility={setVisibility}
+          organOpacities={effectiveOrganOpacities}
+          setOrganOpacities={setOrganOpacities}
+          lesionVisibility={lesionVisibility}
+          setLesionVisibility={setLesionVisibility}
+          targetVisibility={targetVisibility}
+          setTargetVisibility={setTargetVisibility}
+          selectedTarget={selectedTarget}
+          setSelectedTarget={setSelectedTarget}
+          selectedMeasurement={selectedMeasurement}
+          setSelectedMeasurement={setSelectedMeasurement}
+          selectedLesion={selectedLesion}
+          setSelectedLesion={setSelectedLesion}
+          selectedStructure={selectedStructure}
+          setSelectedStructure={setSelectedStructure}
+          focusedTarget={focusedTarget}
+          setFocusedTarget={setFocusedTarget}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          mprWindowPreset={mprWindowPreset}
+          setMprWindowPreset={setMprWindowPreset}
+          mprWindowWidth={mprWindowWidth}
+          setMprWindowWidth={setMprWindowWidth}
+          mprWindowLevel={mprWindowLevel}
+          setMprWindowLevel={setMprWindowLevel}
+          mprShowLesionOverlay={mprShowLesionOverlay}
+          setMprShowLesionOverlay={setMprShowLesionOverlay}
+          onResetCamera={handleResetCamera}
+        />
+      )}
+
+      {showViewer && !isWorkspaceMode && (
         <>
           <div className="app-content">
             <aside className="app-sidebar">
               <Sidebar
                 isPlanningView={isPlanningView}
                 onTogglePlanningView={setIsPlanningView}
+                onOpenWorkspace={() => setIsWorkspaceMode(true)}
                 selectedOrgan={selectedOrgan}
                 onSelectOrgan={handleSelectOrgan}
                 visibility={visibility}

@@ -1,9 +1,9 @@
 # Project Progress Report: AI-Assisted Preoperative Planning System
 
-**Document Version:** 1.6  
-**Last Updated:** September 2026 (Day 18 Completed)  
+**Document Version:** 1.8  
+**Last Updated:** September 2026 (Day 20 Completed)  
 **Target Repository:** `medical-surgery-planner`  
-**Current Status:** Full-Stack Preoperative Planning Interface Active | Multi-Planar Reconstruction (MPR) Synchronized | Surgical Planning Markers Active | Preoperative Measurement & 3D Surgical Geometry Layer Active | Genuine KiTS2023 Model Active | Real CT Inference Validated | 166/166 Backend Tests Passed | Vite Build Clean (0 errors)
+**Current Status:** Preoperative Planning Workspace Active | Full-Stack Workstation Dashboard | Synchronized 3D + MPR Viewport | Persistent Planning Session State | Coordinate System Audit Hardened | 201/201 Backend Tests Passed | Vite Build Clean (0 errors)
 
 
 ---
@@ -341,6 +341,9 @@ python -m pytest tests/ -v
 - [`docs/PLANNING_ANNOTATIONS.md`](PLANNING_ANNOTATIONS.md) — Planning targets architecture & governance
 - [`docs/DAY18.md`](DAY18.md) — Full Day 18 Preoperative Measurement & 3D Surgical Geometry report
 - [`docs/PREOPERATIVE_MEASUREMENTS.md`](PREOPERATIVE_MEASUREMENTS.md) — Preoperative geometry calculation & clinical safety guide
+- [`docs/DAY19.md`](DAY19.md) — Full Day 19 Coordinate System & Spatial Registration Audit report
+- [`docs/DAY20.md`](DAY20.md) — Full Day 20 Preoperative Planning Workspace report
+- [`docs/PLANNING_WORKSPACE.md`](PLANNING_WORKSPACE.md) — Preoperative Planning Workspace architecture & specifications
 
 ---
 
@@ -349,12 +352,30 @@ python -m pytest tests/ -v
 - **Architecture**: Complete quantitative physical Euclidean distance measurement layer between user points, surgical planning targets, and registered anatomical structure boundaries.
 - **Backend Service**: `MeasurementService` in `src/planning/measurement_service.py` with anisotropic voxel spacing calculation, boundary validation, and isolated atomic persistence to `outputs/cases/<case_id>/planning/measurements.json`.
 - **FastAPI Endpoints**: 6 dedicated REST endpoints under `/api/cases/{case_id}/planning/measurements`.
-- **2D/3D Synchronization**: Two-step MPR slice click workflow (Point A → Point B) with interactive banners, 3D line & endpoint sphere rendering in Three.js, camera navigation, and InfoPanel hero distance display.
-- **Quality Assurance**: 166/166 automated backend tests passing (100%), 14 new Day 18 tests, and Vite frontend build 100% clean with 0 errors.
+- **Quality Assurance**: 166/166 automated backend tests passing (100%).
 
 ---
 
-## 9. Active Blockers & Next Steps
+## 9. Day 19 Milestone: Coordinate System & Spatial Registration Audit
+
+- **Audit Focus**: Formalized and verified transformations across all 5 coordinate frames (Voxel, Physical Spacing, Scanner World RAS, MPR Display, Three.js 3D).
+- **Sanitization**: Resolved coordinate ambiguities between origin-relative spacing mm and scanner world RAS mm.
+- **Precision Validation**: Verified round-trip transforms with zero voxel rounding drift across volume bounds.
+- **Quality Assurance**: 189/189 backend tests passing (23 new focused registration tests).
+
+---
+
+## 10. Day 20 Milestone: Product-Facing Preoperative Planning Workspace
+
+- **Workspace Dashboard**: Complete 3-column workstation combining Case Overview, CT Scan Metadata, KiTS23-predicted Findings, Anatomical Registry, Spatial Relationships, Planning Targets, Preoperative Measurements, and Synchronized 3D + MPR Viewports.
+- **Planning Session Service**: `PlanningSessionService` with atomic persistence to `outputs/cases/<case_id>/planning/planning_session.json` and resilient fallback.
+- **Planning Summary Service**: `PlanningSummaryService` consolidating all case diagnostics into a single unified payload without redundant computation.
+- **FastAPI Endpoints**: 4 new planning session & summary REST endpoints.
+- **Quality Assurance**: 201/201 automated backend tests passing (100%), 12 new Day 20 tests, Vite frontend build 100% clean with 0 errors.
+
+---
+
+## 11. Active Blockers & Next Steps
 
 ### Active Blockers:
 * **None**
@@ -366,7 +387,7 @@ python -m pytest tests/ -v
 
 ---
 
-## 8. Medical Safety & Clinical Governance
+## 12. Medical Safety & Clinical Governance
 
 * **Investigational Use Only**: This software is an engineering prototype designed for research and educational preoperative planning. It is not FDA/CE cleared as a primary diagnostic device.
 * **Human-in-the-Loop Review**: All segmentations, 3D meshes, and quantitative measurements must be verified by a board-certified radiologist or surgical specialist before any operative procedure.

@@ -329,3 +329,54 @@ export async function deletePlanningMeasurement(caseId, measurementId) {
     method: 'DELETE',
   });
 }
+
+/**
+ * Retrieve the aggregated Preoperative Planning Summary for a case.
+ *
+ * @param {string} caseId - Case UUID.
+ * @returns {Promise<object>} PlanningSummary envelope
+ */
+export async function getPlanningSummary(caseId) {
+  return apiFetch(`/cases/${caseId}/planning/summary`);
+}
+
+/**
+ * Retrieve the active planning session state for a case.
+ *
+ * @param {string} caseId - Case UUID.
+ * @returns {Promise<object>} PlanningSession
+ */
+export async function getPlanningSession(caseId) {
+  return apiFetch(`/cases/${caseId}/planning/session`);
+}
+
+/**
+ * Create or reset the planning session state for a case.
+ *
+ * @param {string} caseId - Case UUID.
+ * @param {object} [initialData] - Optional initial fields
+ * @returns {Promise<object>} PlanningSession
+ */
+export async function createPlanningSession(caseId, initialData = {}) {
+  return apiFetch(`/cases/${caseId}/planning/session`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(initialData),
+  });
+}
+
+/**
+ * Update active planning session state (partial patch).
+ *
+ * @param {string} caseId - Case UUID.
+ * @param {object} updateData - Partial planning session fields
+ * @returns {Promise<object>} Updated PlanningSession
+ */
+export async function updatePlanningSession(caseId, updateData) {
+  return apiFetch(`/cases/${caseId}/planning/session`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updateData),
+  });
+}
+
