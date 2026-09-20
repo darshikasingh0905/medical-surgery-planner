@@ -370,7 +370,7 @@ function PlanningTargetPanel({ target }) {
           </div>
 
           <div className="info-measurement-item">
-            <span className="info-measurement-label">Physical Coordinates (RAS)</span>
+            <span className="info-measurement-label">Physical Coordinates (mm)</span>
             <span className="info-measurement-value">{physStr}</span>
           </div>
 

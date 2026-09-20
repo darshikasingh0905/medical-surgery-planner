@@ -154,7 +154,7 @@ def calculate_lesion_centroid(
         world_homo = affine @ np.array([voxel_c[0], voxel_c[1], voxel_c[2], 1.0])
         result["world_centroid_mm"] = [round(float(c), 3) for c in world_homo[:3]]
     else:
-        result["world_centroid_mm"] = physical_c
+        result["world_centroid_mm"] = None
 
     return result
 
