@@ -371,11 +371,23 @@ python -m pytest tests/ -v
 - **Planning Session Service**: `PlanningSessionService` with atomic persistence to `outputs/cases/<case_id>/planning/planning_session.json` and resilient fallback.
 - **Planning Summary Service**: `PlanningSummaryService` consolidating all case diagnostics into a single unified payload without redundant computation.
 - **FastAPI Endpoints**: 4 new planning session & summary REST endpoints.
-- **Quality Assurance**: 201/201 automated backend tests passing (100%), 12 new Day 20 tests, Vite frontend build 100% clean with 0 errors.
+- **Quality Assurance**: 206/206 automated backend tests passing (100%), 17 Day 20 tests, Vite frontend build 100% clean with 0 errors.
 
 ---
 
-## 11. Active Blockers & Next Steps
+## 11. Day 21 Milestone: Structured Preoperative Procedure Explanation Engine
+
+- **Architecture**: Structured, deterministic procedural explanation engine converting validated computational outputs into transparent, auditable clinical explanations under strict medical device boundaries.
+- **Pydantic Data Models**: Complete schema suite in `src/planning/procedure_explanation.py` (`CaseOverview`, `ComputationalFinding`, `AnatomyItem`, `RelationshipItem`, `MeasurementItem`, `PlanningTargetItem`, `GeneralProceduralContext`, `ClinicalReviewItem`, `LimitationItem`, `ExplanationProvenance`, `ProcedureExplanation`).
+- **Explanation Service**: `ProcedureExplanationService` in `src/planning/procedure_explanation_service.py` synthesizing case outputs deterministically without LLM generation.
+- **Audience Adaptation**: Tailored views for `technical` and `general` audiences via `?audience=` query parameter.
+- **FastAPI Endpoints**: 2 new REST endpoints (`GET /api/cases/{case_id}/planning/explanation`, `GET /api/cases/{case_id}/planning/explanation/provenance`).
+- **Frontend Workstation Integration**: `ProcedureExplanation.jsx` integrated as dedicated `📋 Explanation` tab in `PlanningWorkspace.jsx`, with interactive cross-viewport focusing, audience switching, and provenance inspection.
+- **Clinical Governance**: Strict adherence to research and educational prototype policy (no diagnosis, no staging, no surgical procedure recommendation, no surgical risk evaluation).
+
+---
+
+## 12. Active Blockers & Next Steps
 
 ### Active Blockers:
 * **None**

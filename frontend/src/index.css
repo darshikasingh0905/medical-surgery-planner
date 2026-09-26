@@ -3299,5 +3299,710 @@ body {
   font-style: italic;
 }
 
+/* ============================================================
+   Day 21 — Procedure Explanation Engine Styles
+   ============================================================ */
+
+.explanation-section {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  padding: 0.75rem;
+  gap: 0.75rem;
+}
+
+.proc-exp-root {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  color: #e2e8f0;
+  font-size: 0.78rem;
+}
+
+.proc-exp-loading,
+.proc-exp-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 1rem;
+  gap: 0.75rem;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+
+.proc-exp-spinner {
+  width: 26px;
+  height: 26px;
+  border: 3px solid rgba(56, 189, 248, 0.2);
+  border-top-color: #38bdf8;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.proc-exp-error-icon {
+  font-size: 1.5rem;
+}
+
+/* ── Header & Title ─────────────────────────────────────────── */
+.proc-exp-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.proc-exp-title-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.proc-exp-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.proc-exp-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.proc-exp-timestamp {
+  font-size: 0.65rem;
+  color: #64748b;
+}
+
+.proc-exp-method-badge {
+  font-size: 0.62rem;
+  background: rgba(14, 165, 233, 0.15);
+  color: #38bdf8;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* ── Audience Switcher ─────────────────────────────────────── */
+.proc-exp-audience-switcher {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.25rem 0.4rem;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.audience-label {
+  font-size: 0.66rem;
+  color: #94a3b8;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.audience-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #94a3b8;
+  font-size: 0.68rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-weight: 500;
+}
+
+.audience-btn:hover {
+  color: #f1f5f9;
+}
+
+.audience-btn.active {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+  font-weight: 700;
+}
+
+/* ── Section Nav Pill Bar ──────────────────────────────────── */
+.proc-exp-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding-top: 0.25rem;
+}
+
+.proc-exp-nav-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+  font-size: 0.65rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.proc-exp-nav-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
+}
+
+.proc-exp-nav-btn.active {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* ── Content & Sections ────────────────────────────────────── */
+.proc-exp-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.proc-exp-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.proc-exp-section-heading {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin: 0;
+}
+
+.proc-exp-section-subtext {
+  font-size: 0.66rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.proc-exp-subheading {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #38bdf8;
+  margin: 0;
+}
+
+.proc-exp-empty {
+  font-size: 0.7rem;
+  color: #64748b;
+  font-style: italic;
+  padding: 0.6rem;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+/* ── Common Card Style ─────────────────────────────────────── */
+.proc-exp-card {
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  transition: all 0.15s ease;
+}
+
+.proc-exp-card--finding {
+  cursor: pointer;
+  border-left: 3px solid #38bdf8;
+}
+
+.proc-exp-card--finding:hover,
+.proc-exp-card--selected {
+  border-color: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+  background: rgba(15, 23, 42, 0.95);
+}
+
+.proc-exp-finding-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.proc-exp-finding-class-badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  background: #f59e0b;
+  color: #0f172a;
+  padding: 0.1rem 0.35rem;
+  border-radius: 2px;
+  letter-spacing: 0.03em;
+}
+
+.proc-exp-finding-id {
+  font-size: 0.7rem;
+  color: #e2e8f0;
+  font-weight: 600;
+  flex: 1;
+}
+
+.proc-exp-focus-btn,
+.proc-exp-nav-to-btn {
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+  font-size: 0.64rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.12s;
+  font-weight: 600;
+}
+
+.proc-exp-focus-btn:hover,
+.proc-exp-nav-to-btn:hover {
+  background: rgba(56, 189, 248, 0.3);
+}
+
+.proc-exp-interp {
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: #cbd5e1;
+  margin: 0;
+}
+
+/* ── KV Grid ───────────────────────────────────────────────── */
+.proc-exp-kv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 0.35rem 0.5rem;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 0.45rem;
+  border-radius: 4px;
+}
+
+.proc-exp-kv {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.proc-exp-k {
+  font-size: 0.6rem;
+  color: #64748b;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.proc-exp-v {
+  font-size: 0.72rem;
+  color: #e2e8f0;
+  word-break: break-word;
+}
+
+.proc-exp-status-badge {
+  font-size: 0.62rem;
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+/* ── Provenance Note ───────────────────────────────────────── */
+.proc-exp-provenance-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.3rem;
+  font-size: 0.62rem;
+  color: #64748b;
+  padding-top: 0.2rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.proc-exp-prov-label {
+  font-weight: 600;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.proc-exp-prov-text {
+  font-style: italic;
+  line-height: 1.3;
+}
+
+/* ── Anatomy Cards ─────────────────────────────────────────── */
+.proc-exp-anatomy-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.proc-exp-anatomy-card {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 5px;
+  padding: 0.45rem 0.55rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.proc-exp-anatomy-card--available:hover {
+  border-color: rgba(56, 189, 248, 0.5);
+  background: rgba(15, 23, 42, 0.9);
+}
+
+.proc-exp-anatomy-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.proc-exp-color-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.proc-exp-anatomy-name {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  flex: 1;
+}
+
+.proc-exp-avail-tag {
+  font-size: 0.58rem;
+  padding: 0.05rem 0.3rem;
+  border-radius: 2px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.proc-exp-avail-tag--yes {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+.proc-exp-avail-tag--no {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.proc-exp-anatomy-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  font-size: 0.65rem;
+}
+
+.proc-exp-rel-text {
+  color: #38bdf8;
+  font-weight: 500;
+}
+
+.proc-exp-unavailable-details {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+  padding: 0.4rem;
+  font-size: 0.68rem;
+}
+
+.proc-exp-unavailable-summary {
+  cursor: pointer;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.proc-exp-unavailable-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+}
+
+.proc-exp-unavail-reason {
+  font-size: 0.62rem;
+  color: #64748b;
+  margin: 0;
+  font-style: italic;
+}
+
+/* ── Spatial Relationships ─────────────────────────────────── */
+.proc-exp-disclaimer-inline {
+  font-size: 0.64rem;
+  color: #94a3b8;
+  font-style: italic;
+  margin: 0;
+  padding: 0.3rem 0.5rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-left: 2px solid #eab308;
+  border-radius: 2px;
+}
+
+.proc-exp-rel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.proc-exp-rel-card {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 5px;
+  padding: 0.45rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  cursor: pointer;
+}
+
+.proc-exp-rel-card:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.proc-exp-rel-card--overlap {
+  border-left: 3px solid #ef4444;
+}
+
+.proc-exp-rel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.proc-exp-rel-name {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.proc-exp-rel-badge {
+  font-size: 0.58rem;
+  padding: 0.05rem 0.3rem;
+  border-radius: 2px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.badge-overlap {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+.badge-sep {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+}
+
+.proc-exp-rel-metric {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.65rem;
+}
+
+.proc-exp-dist-val {
+  font-weight: 700;
+  color: #34d399;
+}
+
+/* ── Measurements & Targets ────────────────────────────────── */
+.proc-exp-meas-header,
+.proc-exp-target-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.proc-exp-meas-label,
+.proc-exp-target-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.proc-exp-meas-val {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #34d399;
+}
+
+.proc-exp-meas-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.64rem;
+}
+
+.proc-exp-target-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot-cyan { background: #38bdf8; box-shadow: 0 0 4px #38bdf8; }
+.dot-amber { background: #f59e0b; box-shadow: 0 0 4px #f59e0b; }
+
+.proc-exp-source-badge {
+  font-size: 0.58rem;
+  padding: 0.05rem 0.3rem;
+  border-radius: 2px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+}
+
+/* ── Context & Clinical Review ─────────────────────────────── */
+.proc-exp-context-disclaimer {
+  font-size: 0.65rem;
+  color: #cbd5e1;
+  background: rgba(14, 165, 233, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 4px;
+  padding: 0.45rem 0.6rem;
+  line-height: 1.35;
+}
+
+.proc-exp-context-list,
+.proc-exp-review-list,
+.proc-exp-limitations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.proc-exp-context-item,
+.proc-exp-review-item,
+.proc-exp-limitation-item {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 5px;
+  padding: 0.5rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.proc-exp-context-heading {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #38bdf8;
+  margin: 0;
+}
+
+.proc-exp-context-text,
+.proc-exp-review-statement,
+.proc-exp-lim-description {
+  font-size: 0.68rem;
+  color: #cbd5e1;
+  margin: 0;
+  line-height: 1.35;
+}
+
+.proc-exp-review-category {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #f59e0b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.proc-exp-lim-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.proc-exp-lim-domain {
+  font-size: 0.62rem;
+  color: #94a3b8;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.proc-exp-lim-id {
+  font-size: 0.6rem;
+  color: #64748b;
+}
+
+/* ── Provenance Details Expandable ─────────────────────────── */
+.proc-exp-provenance-details {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 5px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.68rem;
+  margin-top: 0.4rem;
+}
+
+.proc-exp-provenance-summary {
+  cursor: pointer;
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.proc-exp-provenance-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.45rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 0.4rem;
+}
+
+.proc-exp-prov-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.proc-exp-prov-key {
+  font-size: 0.6rem;
+  color: #64748b;
+  text-transform: capitalize;
+  font-weight: 600;
+}
+
+.proc-exp-prov-val {
+  font-size: 0.66rem;
+  color: #cbd5e1;
+  word-break: break-all;
+}
+
+/* ── Footer Governance ─────────────────────────────────────── */
+.proc-exp-footer {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.proc-exp-governance {
+  font-size: 0.6rem;
+  color: #64748b;
+  line-height: 1.35;
+  margin: 0;
+  font-style: italic;
+  text-align: justify;
+}
+
+
 
 

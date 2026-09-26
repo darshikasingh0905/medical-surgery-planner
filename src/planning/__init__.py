@@ -42,6 +42,23 @@ from src.planning.planning_summary import (
     PlanningSummaryService,
     planning_summary_service,
 )
+from src.planning.procedure_explanation import (
+    CaseOverview,
+    ComputationalFinding,
+    AnatomyItem,
+    RelationshipItem,
+    MeasurementItem,
+    PlanningTargetItem,
+    GeneralProceduralContext,
+    ClinicalReviewItem,
+    LimitationItem,
+    ExplanationProvenance,
+    ProcedureExplanation,
+)
+from src.planning.procedure_explanation_service import (
+    ProcedureExplanationService,
+    procedure_explanation_service,
+)
 
 __all__ = [
     "TargetType",
@@ -70,5 +87,19 @@ __all__ = [
     "PlanningSummary",
     "PlanningSummaryService",
     "planning_summary_service",
+    # Day 21 — Procedure Explanation Engine
+    "CaseOverview",
+    "ComputationalFinding",
+    "AnatomyItem",
+    "RelationshipItem",
+    "MeasurementItem",
+    "PlanningTargetItem",
+    "GeneralProceduralContext",
+    "ClinicalReviewItem",
+    "LimitationItem",
+    "ExplanationProvenance",
+    "ProcedureExplanation",
+    "ProcedureExplanationService",
+    "procedure_explanation_service",
 ]
 

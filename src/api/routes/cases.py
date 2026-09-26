@@ -811,3 +811,70 @@ async def update_planning_session(case_id: str, payload: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating planning session: {str(e)}")
 
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Procedure Explanation Engine Endpoints (Day 21)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/{case_id}/planning/explanation")
+async def get_procedure_explanation(
+    case_id: str,
+    audience: str = "technical",
+):
+    """
+    Retrieve the structured Procedure Explanation for a case.
+
+    Transforms validated computational data into a structured, traceable explanation.
+    Query parameter audience: 'technical' (default) or 'general'.
+
+    CLINICAL GOVERNANCE:
+    This endpoint organizes computational imaging findings and provides
+    general procedural context ONLY. It does not diagnose disease, determine
+    pathology, recommend a surgical procedure, or make any clinical decision.
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+
+    if audience not in ("technical", "general"):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid audience value. Allowed values: 'technical', 'general'",
+        )
+
+    from src.planning.procedure_explanation_service import procedure_explanation_service
+
+    try:
+        explanation = procedure_explanation_service.generate_explanation(
+            case_id=case_id, audience=audience
+        )
+        return explanation
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error generating procedure explanation: {str(e)}"
+        )
+
+
+@router.get("/{case_id}/planning/explanation/provenance")
+async def get_explanation_provenance(case_id: str):
+    """
+    Retrieve only the provenance metadata for a case explanation.
+    Returns traceable source references. Does not expose filesystem paths.
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+
+    from src.planning.procedure_explanation_service import procedure_explanation_service
+
+    try:
+        provenance = procedure_explanation_service.generate_provenance_only(case_id)
+        return provenance
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error retrieving explanation provenance: {str(e)}"
+        )

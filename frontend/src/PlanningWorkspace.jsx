@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Viewer3D from './Viewer3D';
 import MPRViewer from './MPRViewer';
+import ProcedureExplanation from './ProcedureExplanation';
 import { ORGAN_DATA, LESION_VISUAL_CONFIG, ANATOMICAL_STRUCTURE_STYLES } from './data';
 import {
   getPlanningSummary,
@@ -78,7 +79,7 @@ const PlanningWorkspace = ({
   const [loadingSummary, setLoadingSummary] = useState(true);
   const [planningNotes, setPlanningNotes] = useState('');
   const [saveStatus, setSaveStatus] = useState('saved'); // 'saving' | 'saved' | 'error'
-  const [activeTab, setActiveTab] = useState('findings'); // 'findings' | 'anatomy' | 'relationships' | 'notes'
+  const [activeTab, setActiveTab] = useState('findings'); // 'findings' | 'anatomy' | 'relationships' | 'notes' | 'explanation'
 
   // Measurement interactive mode within workspace
   const [isMeasurementMode, setIsMeasurementMode] = useState(false);
@@ -439,6 +440,15 @@ const PlanningWorkspace = ({
               Spatial
             </button>
             <button
+              className={`workspace-tab-btn ${activeTab === 'explanation' ? 'active' : ''}`}
+              onClick={() => setActiveTab('explanation')}
+              type="button"
+              id="btn-open-explanation-tab"
+              title="Open structured procedure explanation"
+            >
+              📋 Explanation
+            </button>
+            <button
               className={`workspace-tab-btn ${activeTab === 'notes' ? 'active' : ''}`}
               onClick={() => setActiveTab('notes')}
               type="button"
@@ -628,6 +638,23 @@ const PlanningWorkspace = ({
                 <p className="gov-disclaimer-note">
                   <em>Computational minimum distance in physical CT space. Does not constitute surgical margins or clinical assessment.</em>
                 </p>
+              </div>
+            )}
+
+            {/* Tab: Structured Preoperative Procedure Explanation (Day 21) */}
+            {activeTab === 'explanation' && (
+              <div className="explanation-section" style={{ height: '100%', overflowY: 'auto' }}>
+                <ProcedureExplanation
+                  caseId={caseId}
+                  onSelectFinding={handleSelectFinding}
+                  onSelectStructure={handleSelectStructureItem}
+                  onSelectMeasurement={handleSelectMeasurementItem}
+                  onSelectTarget={handleSelectTargetItem}
+                  selectedLesion={selectedLesion}
+                  selectedStructure={selectedStructure}
+                  selectedMeasurement={selectedMeasurement}
+                  selectedTarget={selectedTarget}
+                />
               </div>
             )}
 

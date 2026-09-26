@@ -380,3 +380,36 @@ export async function updatePlanningSession(caseId, updateData) {
   });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Procedure Explanation Engine API (Day 21)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Retrieve the structured Procedure Explanation for a case.
+ *
+ * Transforms validated computational data (CT metadata, model findings,
+ * anatomy, spatial relationships, measurements, planning targets) into
+ * a structured, traceable explanation.
+ *
+ * ⚠️ Medical Safety: This explanation organizes computational findings
+ *    and provides general procedural context ONLY. It does not diagnose
+ *    disease, recommend a procedure, or constitute clinical advice.
+ *
+ * @param {string} caseId - Case UUID.
+ * @param {string} [audience='technical'] - 'technical' | 'general'
+ * @returns {Promise<object>} ProcedureExplanation
+ */
+export async function getProcedureExplanation(caseId, audience = 'technical') {
+  const params = new URLSearchParams({ audience });
+  return apiFetch(`/cases/${caseId}/planning/explanation?${params.toString()}`);
+}
+
+/**
+ * Retrieve only the provenance metadata for a case explanation.
+ *
+ * @param {string} caseId - Case UUID.
+ * @returns {Promise<object>} ExplanationProvenance
+ */
+export async function getExplanationProvenance(caseId) {
+  return apiFetch(`/cases/${caseId}/planning/explanation/provenance`);
+}
