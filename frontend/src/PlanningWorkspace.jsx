@@ -12,6 +12,10 @@ import {
   deletePlanningMeasurement,
   createPointToPointMeasurement,
   createPlanningAnnotation,
+  getPlanningMeasurements,
+  createTargetToTargetMeasurement,
+  createTargetToStructureMeasurement,
+  createStructureToStructureMeasurement,
 } from './api';
 
 /**
@@ -93,6 +97,20 @@ const PlanningWorkspace = ({
   // Preoperative report modal state (Day 22)
   const [showReportModal, setShowReportModal] = useState(false);
 
+  // MPR crosshair / planning-marker visibility — session-persisted (Day 23)
+  const [mprShowCrosshairs, setMprShowCrosshairsState] = useState(true);
+  const [mprShowPlanningMarkers, setMprShowPlanningMarkersState] = useState(true);
+
+  // Advanced measurement builder state (Day 23): target_to_target,
+  // target_to_structure, structure_to_structure. Reuses the existing,
+  // already-tested backend measurement services — no calculation here.
+  const [showAdvancedBuilder, setShowAdvancedBuilder] = useState(false);
+  const [advType, setAdvType] = useState('target_to_target');
+  const [advFieldA, setAdvFieldA] = useState('');
+  const [advFieldB, setAdvFieldB] = useState('');
+  const [advError, setAdvError] = useState(null);
+  const [advSubmitting, setAdvSubmitting] = useState(false);
+
   // Debounce ref for session persistence
   const saveTimerRef = useRef(null);
 
@@ -122,6 +140,12 @@ const PlanningWorkspace = ({
             if (session.mpr_window_level) setMprWindowLevel(session.mpr_window_level);
             if (session.mpr_show_lesion_overlay != null) {
               setMprShowLesionOverlay(session.mpr_show_lesion_overlay);
+            }
+            if (session.mpr_show_crosshairs != null) {
+              setMprShowCrosshairsState(session.mpr_show_crosshairs);
+            }
+            if (session.mpr_show_planning_markers != null) {
+              setMprShowPlanningMarkersState(session.mpr_show_planning_markers);
             }
           }
         }
@@ -171,6 +195,53 @@ const PlanningWorkspace = ({
     setViewMode(mode);
     triggerSessionSave({ view_mode: mode });
   };
+
+  // ── MPR Window Preset Selection (Day 23: persists preset + resolved WW/WL) ──
+  const handleMprPresetSelect = useCallback(
+    (presetKey) => {
+      setMprWindowPreset(presetKey);
+      const presetDefn = mprMetadata?.presets?.[presetKey];
+      if (presetDefn) {
+        setMprWindowWidth(presetDefn.ww);
+        setMprWindowLevel(presetDefn.wl);
+        triggerSessionSave({
+          mpr_window_preset: presetKey,
+          mpr_window_width: presetDefn.ww,
+          mpr_window_level: presetDefn.wl,
+        });
+      } else {
+        triggerSessionSave({ mpr_window_preset: presetKey });
+      }
+    },
+    [mprMetadata, setMprWindowPreset, setMprWindowWidth, setMprWindowLevel, triggerSessionSave]
+  );
+
+  // ── MPR Lesion Overlay Toggle (Day 23) ──────────────────────────────────
+  const handleToggleLesionOverlay = useCallback(
+    (next) => {
+      setMprShowLesionOverlay(next);
+      triggerSessionSave({ mpr_show_lesion_overlay: next });
+    },
+    [setMprShowLesionOverlay, triggerSessionSave]
+  );
+
+  // ── MPR Crosshair Visibility Toggle (Day 23) ────────────────────────────
+  const handleToggleCrosshairs = useCallback(
+    (next) => {
+      setMprShowCrosshairsState(next);
+      triggerSessionSave({ mpr_show_crosshairs: next });
+    },
+    [triggerSessionSave]
+  );
+
+  // ── MPR Planning Marker Visibility Toggle (Day 23) ──────────────────────
+  const handleTogglePlanningMarkers = useCallback(
+    (next) => {
+      setMprShowPlanningMarkersState(next);
+      triggerSessionSave({ mpr_show_planning_markers: next });
+    },
+    [triggerSessionSave]
+  );
 
   // ── Cursor Synchronization ───────────────────────────────────────────────
   const handleCursorChange = useCallback(
@@ -345,6 +416,70 @@ const PlanningWorkspace = ({
     },
     [caseId, planningTargets, setPlanningTargets, setSelectedTarget, setTargetVisibility]
   );
+
+  // ── Advanced Measurement Builder (Day 23) ────────────────────────────────
+  // Exposes the already-implemented, already-tested backend measurement
+  // types (target_to_target, target_to_structure, structure_to_structure).
+  // No measurement math is duplicated here — every distance is computed by
+  // the existing MeasurementService via the existing API client functions.
+  const handleAdvTypeChange = useCallback((type) => {
+    setAdvType(type);
+    setAdvFieldA('');
+    setAdvFieldB('');
+    setAdvError(null);
+  }, []);
+
+  const handleCreateAdvancedMeasurement = useCallback(async () => {
+    if (!caseId) return;
+    setAdvError(null);
+
+    if (!advFieldA || !advFieldB) {
+      setAdvError('Select both required entities before creating a measurement.');
+      return;
+    }
+    if (advFieldA === advFieldB) {
+      setAdvError('Select two different entities — the same target or structure cannot be measured against itself.');
+      return;
+    }
+
+    setAdvSubmitting(true);
+    try {
+      let created;
+      if (advType === 'target_to_target') {
+        created = await createTargetToTargetMeasurement(caseId, {
+          source_target_id: advFieldA,
+          target_target_id: advFieldB,
+        });
+      } else if (advType === 'target_to_structure') {
+        created = await createTargetToStructureMeasurement(caseId, {
+          target_id: advFieldA,
+          structure_id: advFieldB,
+        });
+      } else {
+        created = await createStructureToStructureMeasurement(caseId, {
+          source_structure_id: advFieldA,
+          target_structure_id: advFieldB,
+        });
+      }
+
+      // Refresh the authoritative measurement list from the backend rather
+      // than trusting only the POST response.
+      const refreshed = await getPlanningMeasurements(caseId);
+      const list = refreshed.measurements ?? [];
+      setMeasurements(list);
+
+      // Select/focus the newly-created measurement via the existing mechanism.
+      const match = list.find((m) => m.measurement_id === created.measurement_id) || created;
+      handleSelectMeasurementItem(match);
+
+      setAdvFieldA('');
+      setAdvFieldB('');
+    } catch (err) {
+      setAdvError(err.message || 'Failed to create measurement.');
+    } finally {
+      setAdvSubmitting(false);
+    }
+  }, [caseId, advType, advFieldA, advFieldB, setMeasurements, handleSelectMeasurementItem]);
 
   // ── CT Scan Info Formatting ──────────────────────────────────────────────
   const scanMeta = summaryData?.scan_info || mprMetadata;
@@ -794,11 +929,15 @@ const PlanningWorkspace = ({
                   voxelCursor={voxelCursor}
                   onCursorChange={handleCursorChange}
                   showLesionOverlay={mprShowLesionOverlay}
-                  onToggleLesionOverlay={setMprShowLesionOverlay}
+                  onToggleLesionOverlay={handleToggleLesionOverlay}
                   windowPreset={mprWindowPreset}
                   windowWidth={mprWindowWidth}
                   windowLevel={mprWindowLevel}
-                  onPresetSelect={setMprWindowPreset}
+                  onPresetSelect={handleMprPresetSelect}
+                  showCrosshairs={mprShowCrosshairs}
+                  onToggleCrosshairs={handleToggleCrosshairs}
+                  showPlanningMarkers={mprShowPlanningMarkers}
+                  onTogglePlanningMarkers={handleTogglePlanningMarkers}
                   planningTargets={planningTargets}
                   targetVisibility={targetVisibility}
                   selectedTarget={selectedTarget}
@@ -947,7 +1086,176 @@ const PlanningWorkspace = ({
           <div className="layer-card">
             <div className="layer-card-header">
               <h3 className="layer-heading">Preoperative Measurements ({measurements.length})</h3>
+              <button
+                id="btn-toggle-advanced-measurement-builder"
+                className="tool-pill tool-pill--sm"
+                onClick={() => setShowAdvancedBuilder((v) => !v)}
+                type="button"
+                title="Create a measurement between existing planning targets and/or anatomical structures"
+              >
+                🧮 {showAdvancedBuilder ? 'Close Builder' : 'Advanced Measurement'}
+              </button>
             </div>
+
+            {showAdvancedBuilder && (
+              <div className="advanced-measurement-builder" id="advanced-measurement-builder">
+                <div className="adv-meas-type-tabs">
+                  <button
+                    className={`adv-meas-type-btn ${advType === 'target_to_target' ? 'active' : ''}`}
+                    onClick={() => handleAdvTypeChange('target_to_target')}
+                    type="button"
+                  >
+                    Target → Target
+                  </button>
+                  <button
+                    className={`adv-meas-type-btn ${advType === 'target_to_structure' ? 'active' : ''}`}
+                    onClick={() => handleAdvTypeChange('target_to_structure')}
+                    type="button"
+                  >
+                    Target → Structure
+                  </button>
+                  <button
+                    className={`adv-meas-type-btn ${advType === 'structure_to_structure' ? 'active' : ''}`}
+                    onClick={() => handleAdvTypeChange('structure_to_structure')}
+                    type="button"
+                  >
+                    Structure → Structure
+                  </button>
+                </div>
+
+                <div className="adv-meas-fields">
+                  {advType === 'target_to_target' && (
+                    <>
+                      <label className="adv-meas-field">
+                        <span className="adv-meas-field-label">Source Target</span>
+                        <select
+                          className="adv-meas-select"
+                          value={advFieldA}
+                          onChange={(e) => setAdvFieldA(e.target.value)}
+                        >
+                          <option value="">Select planning target…</option>
+                          {planningTargets.map((t) => (
+                            <option key={t.target_id} value={t.target_id}>
+                              {t.label} ({t.source})
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="adv-meas-field">
+                        <span className="adv-meas-field-label">Target Target</span>
+                        <select
+                          className="adv-meas-select"
+                          value={advFieldB}
+                          onChange={(e) => setAdvFieldB(e.target.value)}
+                        >
+                          <option value="">Select planning target…</option>
+                          {planningTargets
+                            .filter((t) => t.target_id !== advFieldA)
+                            .map((t) => (
+                              <option key={t.target_id} value={t.target_id}>
+                                {t.label} ({t.source})
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                    </>
+                  )}
+
+                  {advType === 'target_to_structure' && (
+                    <>
+                      <label className="adv-meas-field">
+                        <span className="adv-meas-field-label">Planning Target</span>
+                        <select
+                          className="adv-meas-select"
+                          value={advFieldA}
+                          onChange={(e) => setAdvFieldA(e.target.value)}
+                        >
+                          <option value="">Select planning target…</option>
+                          {planningTargets.map((t) => (
+                            <option key={t.target_id} value={t.target_id}>
+                              {t.label} ({t.source})
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="adv-meas-field">
+                        <span className="adv-meas-field-label">Anatomical Structure (available only)</span>
+                        <select
+                          className="adv-meas-select"
+                          value={advFieldB}
+                          onChange={(e) => setAdvFieldB(e.target.value)}
+                        >
+                          <option value="">Select structure…</option>
+                          {structures
+                            .filter((s) => s.available)
+                            .map((s) => (
+                              <option key={s.structure_id} value={s.structure_id}>
+                                {s.name}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                    </>
+                  )}
+
+                  {advType === 'structure_to_structure' && (
+                    <>
+                      <label className="adv-meas-field">
+                        <span className="adv-meas-field-label">Structure A (available only)</span>
+                        <select
+                          className="adv-meas-select"
+                          value={advFieldA}
+                          onChange={(e) => setAdvFieldA(e.target.value)}
+                        >
+                          <option value="">Select structure…</option>
+                          {structures
+                            .filter((s) => s.available)
+                            .map((s) => (
+                              <option key={s.structure_id} value={s.structure_id}>
+                                {s.name}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                      <label className="adv-meas-field">
+                        <span className="adv-meas-field-label">Structure B (available only)</span>
+                        <select
+                          className="adv-meas-select"
+                          value={advFieldB}
+                          onChange={(e) => setAdvFieldB(e.target.value)}
+                        >
+                          <option value="">Select structure…</option>
+                          {structures
+                            .filter((s) => s.available && s.structure_id !== advFieldA)
+                            .map((s) => (
+                              <option key={s.structure_id} value={s.structure_id}>
+                                {s.name}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                    </>
+                  )}
+                </div>
+
+                {advError && <p className="adv-meas-error">{advError}</p>}
+
+                <button
+                  id="btn-create-advanced-measurement"
+                  className="adv-meas-submit-btn"
+                  onClick={handleCreateAdvancedMeasurement}
+                  disabled={advSubmitting || !advFieldA || !advFieldB}
+                  type="button"
+                >
+                  {advSubmitting ? 'Creating…' : '➕ Create Measurement'}
+                </button>
+
+                <p className="gov-disclaimer-note">
+                  <em>Computational minimum distance in physical CT space. Does not constitute surgical margins or clinical assessment.</em>
+                </p>
+              </div>
+            )}
+
             <div className="items-scroll-list">
               {measurements.length === 0 ? (
                 <div className="empty-panel-notice">No measurements created yet. Use Measure Mode to add.</div>

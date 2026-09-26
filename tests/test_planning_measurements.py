@@ -441,3 +441,175 @@ def test_real_case_measurements_integration(client):
     # Cleanup created measurement to leave real case pristine
     del_resp = client.delete(f"/api/cases/{real_case_id}/planning/measurements/{meas_id}")
     assert del_resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Day 23: Advanced Measurement UI Backing — Authoritative State & Availability
+# ---------------------------------------------------------------------------
+
+def test_advanced_measurements_appear_in_authoritative_list(client, temp_case):
+    """
+    Day 23: after creating one measurement of each advanced type, GET the
+    measurements list and verify all three appear with correct type/source —
+    this is the exact contract the PlanningWorkspace UI relies on when it
+    refreshes the authoritative list after creation.
+    """
+    case_id, _ = temp_case
+
+    r1 = client.post(
+        f"/api/cases/{case_id}/planning/annotations",
+        json={"label": "Target A", "voxel_coordinate": [10, 10, 10]},
+    )
+    r2 = client.post(
+        f"/api/cases/{case_id}/planning/annotations",
+        json={"label": "Target B", "voxel_coordinate": [10, 15, 10]},
+    )
+    target_a = r1.json()["target_id"]
+    target_b = r2.json()["target_id"]
+
+    tt = client.post(
+        f"/api/cases/{case_id}/planning/measurements/from-targets",
+        json={"source_target_id": target_a, "target_target_id": target_b},
+    )
+    ts = client.post(
+        f"/api/cases/{case_id}/planning/measurements/to-structure",
+        json={"target_id": target_a, "structure_id": "kidney_left"},
+    )
+    ss = client.post(
+        f"/api/cases/{case_id}/planning/measurements/structure-to-structure",
+        json={"source_structure_id": "kidney_left", "target_structure_id": "aorta"},
+    )
+    assert tt.status_code == 201
+    assert ts.status_code == 201
+    assert ss.status_code == 201
+    ids = {tt.json()["measurement_id"], ts.json()["measurement_id"], ss.json()["measurement_id"]}
+
+    listing = client.get(f"/api/cases/{case_id}/planning/measurements")
+    assert listing.status_code == 200
+    data = listing.json()
+    assert data["total_measurements"] == 3
+    listed_ids = {m["measurement_id"] for m in data["measurements"]}
+    assert ids == listed_ids
+
+    by_id = {m["measurement_id"]: m for m in data["measurements"]}
+    assert by_id[tt.json()["measurement_id"]]["measurement_type"] == "target_to_target"
+    assert by_id[tt.json()["measurement_id"]]["source"] == "computational"
+    assert by_id[ts.json()["measurement_id"]]["measurement_type"] == "target_to_structure"
+    assert by_id[ss.json()["measurement_id"]]["measurement_type"] == "structure_to_structure"
+
+
+def test_target_to_structure_rejects_unavailable_structure(client, temp_case):
+    """
+    Day 23 governance: an anatomical structure with no segmentation mask on disk
+    (i.e. genuinely unavailable) must never be treated as a valid measurement
+    endpoint — the advanced measurement UI only ever offers structures flagged
+    available=True, and the backend independently rejects the rest.
+    """
+    case_id, _ = temp_case
+    r = client.post(
+        f"/api/cases/{case_id}/planning/annotations",
+        json={"label": "Point", "voxel_coordinate": [10, 10, 10]},
+    )
+    target_id = r.json()["target_id"]
+
+    # 'renal_artery' has no mask file in this fixture, matching its real-world
+    # unavailability in the golden validated case.
+    response = client.post(
+        f"/api/cases/{case_id}/planning/measurements/to-structure",
+        json={"target_id": target_id, "structure_id": "renal_artery"},
+    )
+    assert response.status_code == 404
+
+
+def test_structure_to_structure_rejects_unavailable_structure_either_side(client, temp_case):
+    """Day 23 governance: unavailable structure rejected regardless of source/target position."""
+    case_id, _ = temp_case
+
+    r1 = client.post(
+        f"/api/cases/{case_id}/planning/measurements/structure-to-structure",
+        json={"source_structure_id": "renal_artery", "target_structure_id": "kidney_left"},
+    )
+    assert r1.status_code == 404
+
+    r2 = client.post(
+        f"/api/cases/{case_id}/planning/measurements/structure-to-structure",
+        json={"source_structure_id": "kidney_left", "target_structure_id": "ureter"},
+    )
+    assert r2.status_code == 404
+
+
+def test_self_reference_is_a_ui_guard_not_a_backend_rule(client, temp_case):
+    """
+    Characterizes existing (unmodified) backend behavior: measuring a target or
+    structure against itself is mathematically degenerate (distance 0.0) but is
+    NOT rejected by the backend measurement algorithm — Day 23 intentionally
+    does not change backend measurement algorithms. Preventing self-selection
+    is implemented as a frontend UI guard in PlanningWorkspace so a user cannot
+    submit a trivial 0.0 self-measurement — not as a new backend validation rule.
+    """
+    case_id, _ = temp_case
+    r = client.post(
+        f"/api/cases/{case_id}/planning/annotations",
+        json={"label": "Solo Target", "voxel_coordinate": [10, 10, 10]},
+    )
+    target_id = r.json()["target_id"]
+
+    tt = client.post(
+        f"/api/cases/{case_id}/planning/measurements/from-targets",
+        json={"source_target_id": target_id, "target_target_id": target_id},
+    )
+    assert tt.status_code == 201
+    assert tt.json()["distance_mm"] == 0.0
+
+    ss = client.post(
+        f"/api/cases/{case_id}/planning/measurements/structure-to-structure",
+        json={"source_structure_id": "kidney_left", "target_structure_id": "kidney_left"},
+    )
+    assert ss.status_code == 201
+    assert ss.json()["distance_mm"] == 0.0
+    assert ss.json()["overlap"] is True
+
+
+def test_real_case_advanced_measurements_use_only_genuinely_available_entities(client):
+    """
+    Day 23 real-case validation: advanced measurements against the golden case
+    succeed only for genuinely available/verified entities and are rejected for
+    known-unavailable structures (renal_artery/vein/pelvis/ureter). Any
+    measurement created here is deleted afterward to leave the real case
+    pristine, matching the existing test_real_case_measurements_integration
+    convention.
+    """
+    real_case_id = "b2f89382-9416-4e94-9486-b00c6b1de64b"
+    real_case_path = Path("outputs/cases") / real_case_id
+    if not real_case_path.is_dir():
+        pytest.skip(f"Real case {real_case_id} not found on disk")
+
+    created_ids = []
+    try:
+        # Genuine model target -> genuine available structure: must succeed
+        ts = client.post(
+            f"/api/cases/{real_case_id}/planning/measurements/to-structure",
+            json={"target_id": "model_cyst_left", "structure_id": "kidney_left"},
+        )
+        assert ts.status_code == 201
+        created_ids.append(ts.json()["measurement_id"])
+        assert ts.json()["measurement_type"] == "target_to_structure"
+
+        # Two genuinely available structures: must succeed
+        ss = client.post(
+            f"/api/cases/{real_case_id}/planning/measurements/structure-to-structure",
+            json={"source_structure_id": "kidney_left", "target_structure_id": "aorta"},
+        )
+        assert ss.status_code == 201
+        created_ids.append(ss.json()["measurement_id"])
+
+        # Known-unavailable structures must never be treated as available
+        for unavailable in ("renal_artery", "renal_vein", "renal_pelvis", "ureter"):
+            rejected = client.post(
+                f"/api/cases/{real_case_id}/planning/measurements/to-structure",
+                json={"target_id": "model_cyst_left", "structure_id": unavailable},
+            )
+            assert rejected.status_code == 404, f"{unavailable} must be rejected as unavailable"
+    finally:
+        for meas_id in created_ids:
+            client.delete(f"/api/cases/{real_case_id}/planning/measurements/{meas_id}")

@@ -366,3 +366,146 @@ def test_planning_notes_are_user_entered_not_ai_generated():
             f"planning_notes must not contain AI-generated phrase: '{phrase}'"
         )
 
+
+# =====================================================================
+# 6. Day 23: Complete MPR Session Persistence
+#    (window preset/width/level, lesion overlay, crosshair visibility,
+#    planning-marker visibility)
+# =====================================================================
+
+def test_mpr_window_preset_width_level_round_trip():
+    """Verify MPR window preset + resolved width/level persist and reload correctly."""
+    updated = planning_session_service.update_session(
+        REAL_CASE_ID,
+        {
+            "mpr_window_preset": "bone",
+            "mpr_window_width": 1800.0,
+            "mpr_window_level": 400.0,
+        },
+    )
+    assert updated.mpr_window_preset == "bone"
+    assert updated.mpr_window_width == 1800.0
+    assert updated.mpr_window_level == 400.0
+
+    reloaded = planning_session_service.get_session(REAL_CASE_ID)
+    assert reloaded.mpr_window_preset == "bone"
+    assert reloaded.mpr_window_width == 1800.0
+    assert reloaded.mpr_window_level == 400.0
+
+
+def test_mpr_lesion_overlay_round_trip():
+    """Verify lesion-overlay visibility toggle persists and reloads correctly (both directions)."""
+    updated = planning_session_service.update_session(
+        REAL_CASE_ID, {"mpr_show_lesion_overlay": False}
+    )
+    assert updated.mpr_show_lesion_overlay is False
+    assert planning_session_service.get_session(REAL_CASE_ID).mpr_show_lesion_overlay is False
+
+    updated2 = planning_session_service.update_session(
+        REAL_CASE_ID, {"mpr_show_lesion_overlay": True}
+    )
+    assert updated2.mpr_show_lesion_overlay is True
+    assert planning_session_service.get_session(REAL_CASE_ID).mpr_show_lesion_overlay is True
+
+
+def test_mpr_crosshair_visibility_round_trip():
+    """Verify crosshair visibility toggle persists and reloads correctly (both directions)."""
+    updated = planning_session_service.update_session(
+        REAL_CASE_ID, {"mpr_show_crosshairs": False}
+    )
+    assert updated.mpr_show_crosshairs is False
+    assert planning_session_service.get_session(REAL_CASE_ID).mpr_show_crosshairs is False
+
+    updated2 = planning_session_service.update_session(
+        REAL_CASE_ID, {"mpr_show_crosshairs": True}
+    )
+    assert updated2.mpr_show_crosshairs is True
+    assert planning_session_service.get_session(REAL_CASE_ID).mpr_show_crosshairs is True
+
+
+def test_mpr_planning_marker_visibility_round_trip():
+    """Verify planning-marker visibility toggle persists and reloads correctly (both directions)."""
+    updated = planning_session_service.update_session(
+        REAL_CASE_ID, {"mpr_show_planning_markers": False}
+    )
+    assert updated.mpr_show_planning_markers is False
+    assert planning_session_service.get_session(REAL_CASE_ID).mpr_show_planning_markers is False
+
+    updated2 = planning_session_service.update_session(
+        REAL_CASE_ID, {"mpr_show_planning_markers": True}
+    )
+    assert updated2.mpr_show_planning_markers is True
+    assert planning_session_service.get_session(REAL_CASE_ID).mpr_show_planning_markers is True
+
+
+def test_api_put_session_mpr_fields_round_trip():
+    """REST-level verification: PUT session with all Day 23 MPR fields together."""
+    payload = {
+        "mpr_window_preset": "lung",
+        "mpr_window_width": 1500.0,
+        "mpr_window_level": -600.0,
+        "mpr_show_lesion_overlay": False,
+        "mpr_show_crosshairs": False,
+        "mpr_show_planning_markers": False,
+    }
+    res = client.put(f"/api/cases/{REAL_CASE_ID}/planning/session", json=payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["mpr_window_preset"] == "lung"
+    assert data["mpr_window_width"] == 1500.0
+    assert data["mpr_window_level"] == -600.0
+    assert data["mpr_show_lesion_overlay"] is False
+    assert data["mpr_show_crosshairs"] is False
+    assert data["mpr_show_planning_markers"] is False
+
+    # Confirm a fresh GET reflects the same persisted values (not silently reset)
+    get_res = client.get(f"/api/cases/{REAL_CASE_ID}/planning/session")
+    get_data = get_res.json()
+    assert get_data["mpr_window_preset"] == "lung"
+    assert get_data["mpr_show_crosshairs"] is False
+    assert get_data["mpr_show_planning_markers"] is False
+
+
+def test_loading_session_does_not_overwrite_persisted_state_with_defaults():
+    """
+    AUDIT (Day 23, Part 2.E): retrieving/loading a session must be read-only —
+    it must never silently reset a persisted non-default value back to the
+    PlanningSession default. This guards against a 'save loop' where the
+    frontend's initial mount-time load effect would clobber a user's prior
+    toggle state.
+    """
+    # Put the session into a distinctly non-default state
+    planning_session_service.update_session(
+        REAL_CASE_ID,
+        {
+            "mpr_window_preset": "bone",
+            "mpr_show_lesion_overlay": False,
+            "mpr_show_crosshairs": False,
+            "mpr_show_planning_markers": False,
+        },
+    )
+
+    # Simulate the frontend's mount-time load: GET (read-only) repeated twice
+    first_load = client.get(f"/api/cases/{REAL_CASE_ID}/planning/session").json()
+    second_load = client.get(f"/api/cases/{REAL_CASE_ID}/planning/session").json()
+
+    assert first_load["mpr_window_preset"] == "bone"
+    assert first_load["mpr_show_lesion_overlay"] is False
+    assert first_load["mpr_show_crosshairs"] is False
+    assert first_load["mpr_show_planning_markers"] is False
+    # A second read must be identical — reading must never mutate state
+    assert second_load == first_load
+
+    # Restore neutral defaults so later test runs in this module aren't affected
+    planning_session_service.update_session(
+        REAL_CASE_ID,
+        {
+            "mpr_window_preset": "soft_tissue",
+            "mpr_window_width": 400.0,
+            "mpr_window_level": 40.0,
+            "mpr_show_lesion_overlay": True,
+            "mpr_show_crosshairs": True,
+            "mpr_show_planning_markers": True,
+        },
+    )
+

@@ -1,9 +1,9 @@
 # Project Progress Report: AI-Assisted Preoperative Planning System
 
-**Document Version:** 1.9  
-**Last Updated:** September 2026 (Day 22 Completed)  
+**Document Version:** 1.10  
+**Last Updated:** September 2026 (Day 23 Completed)  
 **Target Repository:** `medical-surgery-planner`  
-**Current Status:** Preoperative Planning Workspace Active | Full-Stack Workstation Dashboard | Synchronized 3D + MPR Viewport | Persistent Planning Session State | Coordinate System Audit Hardened | Deterministic Procedure Explanation Engine | Preoperative Report & PDF Export Layer | 246/246 Backend Tests Passed | Vite Build Clean (0 errors)
+**Current Status:** Preoperative Planning Workspace Active | Full-Stack Workstation Dashboard | Synchronized 3D + MPR Viewport | Advanced Planning Measurements (Target↔Target, Target↔Structure, Structure↔Structure) | Complete MPR Session Persistence | Persistent Planning Session State | Coordinate System Audit Hardened | Deterministic Procedure Explanation Engine | Preoperative Report & PDF Export Layer | Vite Build Clean (0 errors)
 
 
 ---
@@ -424,7 +424,45 @@ python -m pytest tests/ -v
 
 ---
 
-## 13. Active Blockers & Next Steps
+## 13. Day 23 Milestone: Advanced Planning Measurements + Complete MPR Session Persistence
+
+- **Advanced Measurement Builder**: `PlanningWorkspace.jsx` now exposes the three
+  already-implemented, already-tested backend measurement types that previously had
+  no UI: target↔target, target↔structure, and structure↔structure. A collapsible
+  builder panel in the "Preoperative Measurements" card lets the user pick a
+  measurement type and its required entities (planning targets from the live
+  `planningTargets` list; anatomical structures filtered to `available === true`
+  only), then submits through the existing `createTargetToTargetMeasurement` /
+  `createTargetToStructureMeasurement` / `createStructureToStructureMeasurement`
+  API client functions. No measurement math was added to the frontend.
+- **Authoritative refresh & focus**: after creation, the measurement list is
+  re-fetched via `getPlanningMeasurements()` (not just the POST response), and the
+  new measurement is selected/focused using the existing
+  `handleSelectMeasurementItem` mechanism — the same one point-to-point
+  measurements already use.
+- **Guards**: the UI prevents selecting the same target (or same structure) twice
+  and disables the submit button until both fields are chosen; this is a frontend
+  UX guard only — the backend measurement algorithm itself is unchanged and, if
+  called directly with identical IDs, still returns a mathematically valid 0.0
+  distance (see `docs/DAY23.md` for the characterization test that documents this
+  boundary explicitly).
+- **Complete MPR session persistence**: MPR window preset, window width/level,
+  lesion-overlay visibility, crosshair visibility, and planning-marker visibility
+  now round-trip through the existing debounced `triggerSessionSave` →
+  `updatePlanningSession()` mechanism — previously these were loaded from the
+  session on mount but never saved back on change. Crosshair/marker visibility was
+  lifted out of `MPRViewer`'s local-only state into optional controlled props
+  (backward-compatible: the Standard View in `App.jsx` is untouched and keeps its
+  own local state).
+- **No changes** to MPR coordinate mapping, voxel/world/physical transforms, slice
+  navigation, image rendering, or any backend measurement calculation.
+- **Quality Assurance**: see `docs/DAY23.md` for exact test counts, real-case
+  validation, and governance audit results.
+- **Documentation**: [`docs/DAY23.md`](DAY23.md) — full milestone report.
+
+---
+
+## 14. Active Blockers & Next Steps
 
 ### Active Blockers:
 * **None**
@@ -433,10 +471,12 @@ python -m pytest tests/ -v
 1. Embed MPR slice captures directly into the PDF report (currently tabular/text only)
 2. Multi-point surgical polyline / resection boundary estimation and curved-planar reformation (CPR)
 3. Specialized vascular sub-segmentation integration (e.g. TotalSegmentator tissue/vessel models)
+4. Frontend automated test harness (none currently exists — Day 23's frontend
+   changes were validated via manual build + backend API-level regression tests)
 
 ---
 
-## 14. Medical Safety & Clinical Governance
+## 15. Medical Safety & Clinical Governance
 
 * **Investigational Use Only**: This software is an engineering prototype designed for research and educational preoperative planning. It is not FDA/CE cleared as a primary diagnostic device.
 * **Human-in-the-Loop Review**: All segmentations, 3D meshes, and quantitative measurements must be verified by a board-certified radiologist or surgical specialist before any operative procedure.

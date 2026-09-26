@@ -220,9 +220,32 @@ const MPRViewer = ({
   measurementStep = null,         // 'pick_start' | 'pick_end'
   measurementDraftStart = null,   // voxel coord of Point A
   onMeasurementPointPick,
+  // Crosshair / planning-marker visibility (Day 23 — session-persisted).
+  // Controlled when the parent passes both the value and its handler;
+  // otherwise falls back to internal state (preserves prior behavior for
+  // callers, e.g. App.jsx's Standard View, that don't manage this state).
+  showCrosshairs: showCrosshairsProp,
+  onToggleCrosshairs,
+  showPlanningMarkers: showPlanningMarkersProp,
+  onTogglePlanningMarkers,
 }) => {
-  const [showCrosshairs, setShowCrosshairs] = useState(true);
-  const [showPlanningMarkers, setShowPlanningMarkers] = useState(true);
+  const [localShowCrosshairs, setLocalShowCrosshairs] = useState(true);
+  const [localShowPlanningMarkers, setLocalShowPlanningMarkers] = useState(true);
+
+  const showCrosshairs = showCrosshairsProp !== undefined ? showCrosshairsProp : localShowCrosshairs;
+  const showPlanningMarkers = showPlanningMarkersProp !== undefined ? showPlanningMarkersProp : localShowPlanningMarkers;
+
+  const handleToggleCrosshairs = () => {
+    const next = !showCrosshairs;
+    if (onToggleCrosshairs) onToggleCrosshairs(next);
+    else setLocalShowCrosshairs(next);
+  };
+
+  const handleTogglePlanningMarkers = () => {
+    const next = !showPlanningMarkers;
+    if (onTogglePlanningMarkers) onTogglePlanningMarkers(next);
+    else setLocalShowPlanningMarkers(next);
+  };
 
   if (!mprMetadata || !caseId) {
     return (
@@ -414,7 +437,7 @@ const MPRViewer = ({
           <button
             id="btn-toggle-crosshairs"
             className={`mpr-toggle-btn ${showCrosshairs ? 'active' : ''}`}
-            onClick={() => setShowCrosshairs(!showCrosshairs)}
+            onClick={handleToggleCrosshairs}
             title="Toggle crosshair overlays"
             type="button"
           >
@@ -434,7 +457,7 @@ const MPRViewer = ({
           <button
             id="btn-toggle-planning-markers"
             className={`mpr-toggle-btn ${showPlanningMarkers ? 'active' : ''}`}
-            onClick={() => setShowPlanningMarkers(!showPlanningMarkers)}
+            onClick={handleTogglePlanningMarkers}
             title="Toggle surgical planning markers on 2D slices"
             type="button"
           >

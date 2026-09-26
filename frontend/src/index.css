@@ -4733,6 +4733,136 @@ body {
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   Day 23: Advanced Planning Measurements Builder
+   ══════════════════════════════════════════════════════════════════ */
+
+.layer-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.layer-card-header .layer-heading {
+  margin: 0;
+}
+
+.tool-pill--sm {
+  padding: 0.2rem 0.45rem;
+  font-size: 0.62rem;
+  flex-shrink: 0;
+}
+
+.advanced-measurement-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  background: #0d131f;
+  border: 1px solid #1e293b;
+  border-radius: 5px;
+  padding: 0.55rem;
+  margin-bottom: 0.5rem;
+}
+
+.adv-meas-type-tabs {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.adv-meas-type-btn {
+  flex: 1;
+  min-width: 0;
+  background: #131c2e;
+  border: 1px solid #1e293b;
+  color: #94a3b8;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.32rem 0.3rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adv-meas-type-btn:hover {
+  border-color: #38bdf8;
+}
+
+.adv-meas-type-btn.active {
+  background: rgba(56, 189, 248, 0.18);
+  color: #38bdf8;
+  border-color: #38bdf8;
+}
+
+.adv-meas-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.adv-meas-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.adv-meas-field-label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.adv-meas-select {
+  background: #131c2e;
+  border: 1px solid #1e293b;
+  color: #e2e8f0;
+  font-size: 0.7rem;
+  padding: 0.3rem 0.4rem;
+  border-radius: 4px;
+}
+
+.adv-meas-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.adv-meas-error {
+  font-size: 0.66rem;
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 4px;
+  padding: 0.3rem 0.45rem;
+  margin: 0;
+}
+
+.adv-meas-submit-btn {
+  align-self: flex-start;
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid #38bdf8;
+  color: #38bdf8;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.32rem 0.7rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.adv-meas-submit-btn:hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.28);
+}
+
+.adv-meas-submit-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 
 
 
