@@ -1,9 +1,9 @@
 # Project Progress Report: AI-Assisted Preoperative Planning System
 
-**Document Version:** 1.8  
-**Last Updated:** September 2026 (Day 20 Completed)  
+**Document Version:** 1.9  
+**Last Updated:** September 2026 (Day 22 Completed)  
 **Target Repository:** `medical-surgery-planner`  
-**Current Status:** Preoperative Planning Workspace Active | Full-Stack Workstation Dashboard | Synchronized 3D + MPR Viewport | Persistent Planning Session State | Coordinate System Audit Hardened | 201/201 Backend Tests Passed | Vite Build Clean (0 errors)
+**Current Status:** Preoperative Planning Workspace Active | Full-Stack Workstation Dashboard | Synchronized 3D + MPR Viewport | Persistent Planning Session State | Coordinate System Audit Hardened | Deterministic Procedure Explanation Engine | Preoperative Report & PDF Export Layer | 246/246 Backend Tests Passed | Vite Build Clean (0 errors)
 
 
 ---
@@ -37,7 +37,8 @@ The system emphasizes **clinical safety, deterministic reproducibility, and stri
 | **Lesion REST API Endpoints** | **Completed** | FastAPI | `GET /lesions`, `GET /lesions/{id}` with cached + dynamic metrics |
 | **Multi-Planar Reconstruction (MPR)** | **Completed** | NumPy, Pillow, FastAPI | Sub-millisecond Axial/Coronal/Sagittal streaming, HU windowing, synchronized crosshairs |
 | **Planning Markers & Annotation Layer**| **Completed** | FastAPI, React, Three.js | Unified target model, atomic JSON persistence, 2D/3D synchronized markers, click-to-annotate UX |
-| **Automated Verification Suite** | **Active (100% Pass)** | `pytest` (152 tests) | 152 passed, 0 skipped, 0 failed |
+| **Automated Verification Suite** | **Active (100% Pass)** | `pytest` (246 tests) | 246 passed, 0 skipped, 0 failed |
+| **Preoperative Report & PDF Export** | **Completed** | Pydantic, ReportLab, React | 15-section JSON report + A4 PDF, technical/general audiences |
 
 ---
 
@@ -387,19 +388,55 @@ python -m pytest tests/ -v
 
 ---
 
-## 12. Active Blockers & Next Steps
+## 12. Day 22 Milestone: Preoperative Case Planning Report & PDF Export Layer
+
+- **Architecture**: A presentation/export layer performing zero new calculation —
+  consolidates `PlanningSummaryService` and the Day 21 `ProcedureExplanationService`
+  into a single 15-section `PreoperativeReport` (case overview, imaging info,
+  computational findings, anatomy registry, spatial relationships, lesion
+  measurements, planning targets, planning measurements, session notes, procedural
+  context, clinical review items, system limitations, provenance, governance).
+- **Pydantic Data Models**: `src/planning/report_models.py`.
+- **Report Service**: `PreoperativeReportService` in `src/planning/report_service.py`
+  — `generate_report()` (JSON) and `generate_report_pdf()` (ReportLab Platypus A4 PDF
+  via `build_pdf_document()`, with a two-pass `NumberedCanvas` for running
+  headers/footers and "Page X of Y").
+- **FastAPI Endpoints**: `GET /api/cases/{case_id}/planning/report` and
+  `GET /api/cases/{case_id}/planning/report/pdf`, both with `?audience=technical|general`.
+- **Frontend**: `PreoperativeReportModal.jsx`, opened from a new **📄 Preoperative
+  Report** button in the Planning Workspace header; supports audience toggling,
+  browser print, and native PDF download.
+- **Fix**: `build_pdf_document()` had 12 stale field references left over from an
+  earlier draft of the report schema (JSON path and frontend were already correct).
+  All 12 were corrected in a full field-by-field audit against `report_models.py`;
+  see `docs/DAY22.md` for the complete before/after table.
+- **Planning-Measurement Decision**: the golden validation case is intentionally kept
+  measurement-free (an existing Day 18 test creates-then-deletes any measurement on
+  it to leave it pristine); the Day 22 test suite now asserts this empty state
+  explicitly rather than expecting fabricated data. See `docs/DAY22.md` §3.
+- **Quality Assurance**: 246/246 backend tests passing (25 in
+  `tests/test_preoperative_report.py`), Vite build clean (0 errors), real-case
+  (`b2f89382-9416-4e94-9486-b00c6b1de64b`) JSON + PDF validated for both audiences,
+  PDF content audited for prohibited clinical claims (none found — only disclaimer
+  negations of diagnosis/staging/safe-margin language).
+- **Documentation**: [`docs/DAY22.md`](DAY22.md) — full milestone report,
+  [`docs/PREOPERATIVE_REPORT.md`](PREOPERATIVE_REPORT.md) — architecture & API reference.
+
+---
+
+## 13. Active Blockers & Next Steps
 
 ### Active Blockers:
 * **None**
 
 ### Future Directions:
-1. Automated PDF surgical planning case report generation with embedded MPR slice captures and quantitative clearance tables
+1. Embed MPR slice captures directly into the PDF report (currently tabular/text only)
 2. Multi-point surgical polyline / resection boundary estimation and curved-planar reformation (CPR)
 3. Specialized vascular sub-segmentation integration (e.g. TotalSegmentator tissue/vessel models)
 
 ---
 
-## 12. Medical Safety & Clinical Governance
+## 14. Medical Safety & Clinical Governance
 
 * **Investigational Use Only**: This software is an engineering prototype designed for research and educational preoperative planning. It is not FDA/CE cleared as a primary diagnostic device.
 * **Human-in-the-Loop Review**: All segmentations, 3D meshes, and quantitative measurements must be verified by a board-certified radiologist or surgical specialist before any operative procedure.

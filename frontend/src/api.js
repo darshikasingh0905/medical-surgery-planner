@@ -413,3 +413,57 @@ export async function getProcedureExplanation(caseId, audience = 'technical') {
 export async function getExplanationProvenance(caseId) {
   return apiFetch(`/cases/${caseId}/planning/explanation/provenance`);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Preoperative Report & Export API (Day 22)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Retrieve the structured Preoperative Report for a case.
+ *
+ * Aggregates validated computational findings, anatomical structures, spatial
+ * metrics, planning targets/measurements, session notes, procedural context,
+ * clinical review items, and governance statements into a unified report.
+ *
+ * @param {string} caseId - Case UUID.
+ * @param {string} [audience='technical'] - 'technical' | 'general'
+ * @returns {Promise<object>} PreoperativeReport
+ */
+export async function getPreoperativeReport(caseId, audience = 'technical') {
+  const params = new URLSearchParams({ audience });
+  return apiFetch(`/cases/${caseId}/planning/report?${params.toString()}`);
+}
+
+/**
+ * Fetch and download the Preoperative Report as a formatted PDF.
+ *
+ * @param {string} caseId - Case UUID.
+ * @param {string} [audience='technical'] - 'technical' | 'general'
+ * @returns {Promise<Blob>} PDF Blob
+ */
+export async function getPreoperativeReportPdf(caseId, audience = 'technical') {
+  const params = new URLSearchParams({ audience });
+  let response;
+  try {
+    response = await fetch(`${BASE_URL}/cases/${caseId}/planning/report/pdf?${params.toString()}`);
+  } catch (_networkError) {
+    throw new Error(
+      'Cannot reach the backend server to generate the PDF report.'
+    );
+  }
+
+  if (!response.ok) {
+    let detail = `PDF generation failed (${response.status})`;
+    try {
+      const body = await response.json();
+      if (body.detail) {
+        detail = body.detail;
+      }
+    } catch {
+      // ignore JSON parse failure
+    }
+    throw new Error(detail);
+  }
+
+  return response.blob();
+}

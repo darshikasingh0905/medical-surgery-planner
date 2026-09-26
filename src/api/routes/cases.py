@@ -878,3 +878,93 @@ async def get_explanation_provenance(case_id: str):
         raise HTTPException(
             status_code=500, detail=f"Error retrieving explanation provenance: {str(e)}"
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DAY 22 — Preoperative Case Planning Report Endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/{case_id}/planning/report")
+async def get_preoperative_report(
+    case_id: str,
+    audience: str = "technical",
+):
+    """
+    Retrieve the consolidated Preoperative Case Planning Report (Day 22).
+
+    Aggregates all 15 authoritative sections:
+      - Case overview & CT scan acquisition metadata
+      - KiTS23 model findings & lesion dimensions
+      - Anatomical structures & verified disk availability
+      - Computational spatial relationships & Euclidean distances
+      - Planning targets & preoperative measurements
+      - User-entered planning session notes
+      - Multi-audience procedural context (technical vs. general)
+      - Mandatory non-computational clinical review items
+      - Technical limitations & algorithm provenance
+      - Research & educational prototype governance notice
+
+    Does NOT provide clinical diagnoses, pathology determinations, or surgical recommendations.
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+
+    if audience not in ("technical", "general"):
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid audience value. Allowed values: 'technical', 'general'",
+        )
+
+    from src.planning.report_service import preoperative_report_service
+
+    try:
+        report = preoperative_report_service.generate_report(
+            case_id=case_id, audience=audience
+        )
+        return report
+    except (FileNotFoundError, ValueError) as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error generating preoperative report: {str(e)}"
+        )
+
+
+@router.get("/{case_id}/planning/report/pdf")
+async def get_preoperative_report_pdf(
+    case_id: str,
+    audience: str = "technical",
+):
+    """
+    Download the Preoperative Case Planning Report as an A4 PDF document.
+
+    Compiled deterministically using ReportLab Platypus from authoritative case data.
+    """
+    if not case_exists(case_id):
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+
+    if audience not in ("technical", "general"):
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid audience value. Allowed values: 'technical', 'general'",
+        )
+
+    from src.planning.report_service import preoperative_report_service
+
+    try:
+        pdf_bytes = preoperative_report_service.generate_report_pdf(
+            case_id=case_id, audience=audience
+        )
+        filename = f"preoperative_report_{case_id[:8]}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except (FileNotFoundError, ValueError) as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error compiling preoperative report PDF: {str(e)}"
+        )
+

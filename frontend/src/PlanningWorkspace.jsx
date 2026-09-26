@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import Viewer3D from './Viewer3D';
 import MPRViewer from './MPRViewer';
 import ProcedureExplanation from './ProcedureExplanation';
+import PreoperativeReportModal from './PreoperativeReportModal';
 import { ORGAN_DATA, LESION_VISUAL_CONFIG, ANATOMICAL_STRUCTURE_STYLES } from './data';
 import {
   getPlanningSummary,
@@ -88,6 +89,9 @@ const PlanningWorkspace = ({
 
   // Annotation creation mode
   const [isAnnotationMode, setIsAnnotationMode] = useState(false);
+
+  // Preoperative report modal state (Day 22)
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // Debounce ref for session persistence
   const saveTimerRef = useRef(null);
@@ -397,6 +401,15 @@ const PlanningWorkspace = ({
             <span className="gov-icon">⚖️</span>
             Research Prototype — Educational Use
           </div>
+          <button
+            id="btn-open-preoperative-report"
+            className="workspace-report-btn"
+            onClick={() => setShowReportModal(true)}
+            type="button"
+            title="Open Preoperative Planning Report (JSON/PDF Preview & Export)"
+          >
+            📄 Preoperative Report
+          </button>
           {onExitWorkspace && (
             <button
               id="btn-exit-workspace"
@@ -970,6 +983,14 @@ const PlanningWorkspace = ({
           </div>
         </aside>
       </div>
+
+      {/* Preoperative Report Review & Export Modal (Day 22) */}
+      {showReportModal && (
+        <PreoperativeReportModal
+          caseId={caseId}
+          onClose={() => setShowReportModal(false)}
+        />
+      )}
     </div>
   );
 };

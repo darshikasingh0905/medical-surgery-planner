@@ -59,8 +59,33 @@ from src.planning.procedure_explanation_service import (
     ProcedureExplanationService,
     procedure_explanation_service,
 )
+from src.planning.report_models import (
+    PreoperativeReport,
+    ReportMetadata,
+    ReportCaseOverview,
+    ReportImagingInfo,
+    ReportFindingItem,
+    ReportAnatomyItem,
+    ReportSpatialRelationshipItem,
+    ReportLesionMeasurementItem,
+    ReportPlanningTargetItem,
+    ReportPlanningMeasurementItem,
+    ReportPlanningSessionNotes,
+    ReportProceduralContextItem,
+    ReportClinicalReviewItem,
+    ReportLimitationItem,
+    ReportProvenance,
+    ReportGovernance,
+)
+from src.planning.report_service import (
+    PreoperativeReportService,
+    preoperative_report_service,
+)
 
 __all__ = [
+    "PreoperativeReport",
+    "PreoperativeReportService",
+    "preoperative_report_service",
     "TargetType",
     "TargetSource",
     "PlanningTarget",
