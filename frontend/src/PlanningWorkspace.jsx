@@ -60,6 +60,10 @@ const PlanningWorkspace = ({
   setLesionVisibility,
   targetVisibility = {},
   setTargetVisibility,
+  organOpacity = 0.85,
+  onChangeOrganOpacity,
+  lesionOpacity = 1.0,
+  onChangeLesionOpacity,
   selectedTarget = null,
   setSelectedTarget,
   selectedMeasurement = null,
@@ -125,6 +129,11 @@ const PlanningWorkspace = ({
   const [creatingAnnotationForLesion, setCreatingAnnotationForLesion] = useState(null);
   const [lesionAnnotationError, setLesionAnnotationError] = useState(null); // { lesionId, message }
 
+  // Visualization controls panel (Day 25) — organ/lesion opacity sliders.
+  // organOpacity/lesionOpacity themselves are NOT local state: they are the
+  // same App.jsx-owned values already used by the Standard View's Sidebar.
+  const [showVizControls, setShowVizControls] = useState(false);
+
   // Debounce ref for session persistence
   const saveTimerRef = useRef(null);
 
@@ -161,6 +170,19 @@ const PlanningWorkspace = ({
             if (session.mpr_show_planning_markers != null) {
               setMprShowPlanningMarkersState(session.mpr_show_planning_markers);
             }
+            // Day 25: restore organ/lesion opacity and lesion visibility.
+            // These are read-only restores (plain setters) — no session save
+            // is triggered here, so loading a session can never itself
+            // create a save loop.
+            if (session.organ_opacity != null && onChangeOrganOpacity) {
+              onChangeOrganOpacity(session.organ_opacity);
+            }
+            if (session.lesion_opacity != null && onChangeLesionOpacity) {
+              onChangeLesionOpacity(session.lesion_opacity);
+            }
+            if (session.visible_lesions && Object.keys(session.visible_lesions).length > 0) {
+              setLesionVisibility(session.visible_lesions);
+            }
           }
         }
       } catch (err) {
@@ -175,7 +197,18 @@ const PlanningWorkspace = ({
     return () => {
       isCancelled = true;
     };
-  }, [caseId, setViewMode, setVoxelCursor, setMprWindowPreset, setMprWindowWidth, setMprWindowLevel, setMprShowLesionOverlay]);
+  }, [
+    caseId,
+    setViewMode,
+    setVoxelCursor,
+    setMprWindowPreset,
+    setMprWindowWidth,
+    setMprWindowLevel,
+    setMprShowLesionOverlay,
+    onChangeOrganOpacity,
+    onChangeLesionOpacity,
+    setLesionVisibility,
+  ]);
 
   // ── Guard: never keep annotation-edit state pointed at a stale selection ──
   // (Day 24 Part 4: "do not silently overwrite another annotation")
@@ -581,6 +614,70 @@ const PlanningWorkspace = ({
     [caseId, setPlanningTargets, setTargetVisibility, handleSelectTargetItem]
   );
 
+  // ── Organ/Lesion Opacity Controls (Day 25) ───────────────────────────────
+  // organOpacity/lesionOpacity are the exact same App.jsx-owned values the
+  // Standard View's Sidebar already controls — no second opacity state.
+  const handleOrganOpacityChange = useCallback(
+    (value) => {
+      if (onChangeOrganOpacity) onChangeOrganOpacity(value);
+      triggerSessionSave({ organ_opacity: value });
+    },
+    [onChangeOrganOpacity, triggerSessionSave]
+  );
+
+  const handleLesionOpacityChange = useCallback(
+    (value) => {
+      if (onChangeLesionOpacity) onChangeLesionOpacity(value);
+      triggerSessionSave({ lesion_opacity: value });
+    },
+    [onChangeLesionOpacity, triggerSessionSave]
+  );
+
+  // ── Lesion Visibility Toggle (Day 25) ────────────────────────────────────
+  // Mirrors the existing handleToggleStructureVisibility pattern exactly,
+  // reusing the same lesionVisibility/setLesionVisibility state App.jsx
+  // already owns and threads through — no duplicate visibility state.
+  const handleToggleLesionVisibility = useCallback(
+    (lesionId) => {
+      setLesionVisibility((prev) => {
+        const next = { ...prev, [lesionId]: !(prev[lesionId] !== false) };
+        triggerSessionSave({ visible_lesions: next });
+        return next;
+      });
+    },
+    [setLesionVisibility, triggerSessionSave]
+  );
+
+  // ── Preoperative Report Modal Selection Adapters (Day 25) ────────────────
+  // The report modal only ever passes back an authoritative ID; the actual
+  // lookup + selection/focus is delegated entirely to the existing handlers
+  // and the workspace's own already-loaded, authoritative arrays. No
+  // coordinate math or duplicate selection logic lives in the modal.
+  // (handleReportSelectFinding is defined further below, once findingsList exists.)
+  const handleReportSelectStructure = useCallback(
+    (structureId) => {
+      const match = structures.find((s) => s.structure_id === structureId);
+      if (match && match.available) handleSelectStructureItem(structureId);
+    },
+    [structures, handleSelectStructureItem]
+  );
+
+  const handleReportSelectTarget = useCallback(
+    (targetId) => {
+      const match = planningTargets.find((t) => t.target_id === targetId);
+      if (match) handleSelectTargetItem(match);
+    },
+    [planningTargets, handleSelectTargetItem]
+  );
+
+  const handleReportSelectMeasurement = useCallback(
+    (measurementId) => {
+      const match = measurements.find((m) => m.measurement_id === measurementId);
+      if (match) handleSelectMeasurementItem(match);
+    },
+    [measurements, handleSelectMeasurementItem]
+  );
+
   // ── CT Scan Info Formatting ──────────────────────────────────────────────
   const scanMeta = summaryData?.scan_info || mprMetadata;
   const shapeStr = scanMeta?.shape ? `${scanMeta.shape[0]} × ${scanMeta.shape[1]} × ${scanMeta.shape[2]}` : '293 × 293 × 344';
@@ -589,6 +686,14 @@ const PlanningWorkspace = ({
     : '1.5 × 1.5 × 1.5 mm';
   const orientStr = scanMeta?.orientation ? scanMeta.orientation.join('') : 'RAS';
   const findingsList = summaryData?.findings || lesions;
+
+  const handleReportSelectFinding = useCallback(
+    (findingId) => {
+      const match = findingsList.find((f) => f.lesion_id === findingId);
+      if (match) handleSelectFinding(match);
+    },
+    [findingsList, handleSelectFinding]
+  );
 
   return (
     <div className="planning-workspace" id="preoperative-planning-workspace">
@@ -724,6 +829,7 @@ const PlanningWorkspace = ({
                       (t) => t.source === 'user' && t.lesion_id === f.lesion_id
                     );
                     const isCreatingAnnotation = creatingAnnotationForLesion === f.lesion_id;
+                    const isLesionVisible = lesionVisibility[f.lesion_id] !== false;
                     return (
                       <div
                         key={f.lesion_id}
@@ -738,6 +844,19 @@ const PlanningWorkspace = ({
                             </h4>
                             <span className="finding-host">Host: {f.host_organ?.replace('_', ' ') || 'Kidney'}</span>
                           </div>
+                          <button
+                            id={`finding-visibility-${f.lesion_id}`}
+                            className="visibility-toggle"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleLesionVisibility(f.lesion_id);
+                            }}
+                            title={isLesionVisible ? 'Hide lesion mesh' : 'Show lesion mesh'}
+                            aria-label={isLesionVisible ? 'Hide lesion mesh' : 'Show lesion mesh'}
+                            aria-pressed={isLesionVisible}
+                          >
+                            {isLesionVisible ? '👁️' : '👁️‍🗨️'}
+                          </button>
                           <button
                             className="finding-focus-btn"
                             onClick={(e) => {
@@ -1031,8 +1150,63 @@ const PlanningWorkspace = ({
               >
                 🔄 Reset Camera
               </button>
+
+              <button
+                id="btn-toggle-viz-controls"
+                className={`tool-pill ${showVizControls ? 'active' : ''}`}
+                onClick={() => setShowVizControls((v) => !v)}
+                type="button"
+                title="Organ & lesion transparency controls"
+              >
+                🎚️ Visualization
+              </button>
             </div>
           </div>
+
+          {/* Organ/Lesion Opacity Controls (Day 25) */}
+          {showVizControls && (
+            <div className="viz-controls-panel" id="viz-controls-panel">
+              <div className="viz-control-row">
+                <label htmlFor="workspace-organ-opacity-slider" className="viz-control-label">
+                  Organ Transparency
+                </label>
+                <span className="viz-control-val">{Math.round(organOpacity * 100)}%</span>
+              </div>
+              <input
+                id="workspace-organ-opacity-slider"
+                type="range"
+                min="0.1"
+                max="1.0"
+                step="0.05"
+                value={organOpacity}
+                onChange={(e) => handleOrganOpacityChange(parseFloat(e.target.value))}
+                className="viz-opacity-slider"
+                aria-label="Organ transparency"
+              />
+
+              {lesions.length > 0 && (
+                <>
+                  <div className="viz-control-row" style={{ marginTop: '0.5rem' }}>
+                    <label htmlFor="workspace-lesion-opacity-slider" className="viz-control-label">
+                      Lesion Opacity
+                    </label>
+                    <span className="viz-control-val">{Math.round(lesionOpacity * 100)}%</span>
+                  </div>
+                  <input
+                    id="workspace-lesion-opacity-slider"
+                    type="range"
+                    min="0.1"
+                    max="1.0"
+                    step="0.05"
+                    value={lesionOpacity}
+                    onChange={(e) => handleLesionOpacityChange(parseFloat(e.target.value))}
+                    className="viz-opacity-slider"
+                    aria-label="Lesion opacity"
+                  />
+                </>
+              )}
+            </div>
+          )}
 
           {/* Visualization Container */}
           <div className={`visualizer-viewport visualizer-viewport--${viewMode}`}>
@@ -1043,6 +1217,7 @@ const PlanningWorkspace = ({
                   meshUrls={meshUrls}
                   lesions={lesions}
                   lesionVisibility={lesionVisibility}
+                  lesionOpacity={lesionOpacity}
                   organOpacities={organOpacities}
                   selectedStructure={selectedStructure}
                   focusedTarget={focusedTarget}
@@ -1492,6 +1667,10 @@ const PlanningWorkspace = ({
         <PreoperativeReportModal
           caseId={caseId}
           onClose={() => setShowReportModal(false)}
+          onSelectFinding={handleReportSelectFinding}
+          onSelectStructure={handleReportSelectStructure}
+          onSelectTarget={handleReportSelectTarget}
+          onSelectMeasurement={handleReportSelectMeasurement}
         />
       )}
     </div>

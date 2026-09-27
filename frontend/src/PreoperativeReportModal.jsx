@@ -17,8 +17,21 @@ import { getPreoperativeReport, getPreoperativeReportPdf } from './api';
  *
  * ⚠️ Medical Safety: Research/educational prototype only. No clinical diagnoses,
  *    resectability claims, or autonomous operative advice.
+ *
+ * Day 25: rows referencing an authoritative finding/structure/target/measurement
+ * ID are clickable and delegate to the corresponding onSelect* callback, which
+ * the workspace resolves against its own already-loaded authoritative data and
+ * routes through its existing selection/focus handlers. This modal never looks
+ * up or recomputes any coordinate or clinical data itself.
  */
-export default function PreoperativeReportModal({ caseId, onClose }) {
+export default function PreoperativeReportModal({
+  caseId,
+  onClose,
+  onSelectFinding,
+  onSelectStructure,
+  onSelectTarget,
+  onSelectMeasurement,
+}) {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -51,6 +64,27 @@ export default function PreoperativeReportModal({ caseId, onClose }) {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  // Keyboard accessibility helper for clickable non-button row elements
+  // (table rows / list items), matching the existing pattern already used
+  // for clickable rows elsewhere in the app (e.g. Sidebar.jsx's lesion list).
+  const handleRowKeyDown = (callback) => (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      callback();
+    }
+  };
+
+  // Delegates to the caller-supplied selection handler (which resolves the ID
+  // against the workspace's own authoritative data and reuses its existing
+  // selection/focus handlers), then closes the modal so the resulting
+  // MPR/3D/tab focus is actually visible — the modal otherwise fully covers
+  // the workspace.
+  const handleInteractiveSelect = (selectFn, id) => {
+    if (typeof selectFn !== 'function') return;
+    selectFn(id);
+    onClose();
   };
 
   const handleDownloadPdf = async () => {
@@ -273,21 +307,33 @@ export default function PreoperativeReportModal({ caseId, onClose }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {report.computational_findings.map((f) => (
-                          <tr key={f.finding_id}>
-                            <td className="font-mono font-bold">{f.finding_id}</td>
-                            <td><span className="badge-tag badge-tag--finding">{f.class_name}</span></td>
-                            <td className="font-mono">{f.volume_ml.toFixed(4)} mL</td>
-                            <td className="font-mono">
-                              [{f.centroid_physical_mm.map(c => c.toFixed(2)).join(', ')}]
-                            </td>
-                            <td className="font-mono">
-                              {f.bounding_box_mm.map(b => b.toFixed(1)).join(' × ')}
-                            </td>
-                            <td>{f.host_organ || 'Unassigned'}</td>
-                            <td><span className="badge-tag badge-tag--review">{f.review_requirement}</span></td>
-                          </tr>
-                        ))}
+                        {report.computational_findings.map((f) => {
+                          const interactive = typeof onSelectFinding === 'function';
+                          return (
+                            <tr
+                              key={f.finding_id}
+                              className={interactive ? 'report-row-interactive' : ''}
+                              onClick={interactive ? () => handleInteractiveSelect(onSelectFinding, f.finding_id) : undefined}
+                              onKeyDown={interactive ? handleRowKeyDown(() => handleInteractiveSelect(onSelectFinding, f.finding_id)) : undefined}
+                              tabIndex={interactive ? 0 : undefined}
+                              role={interactive ? 'button' : undefined}
+                              aria-label={interactive ? `Select finding ${f.finding_id} in workspace` : undefined}
+                              title={interactive ? 'Click to focus this finding in the workspace' : undefined}
+                            >
+                              <td className="font-mono font-bold">{f.finding_id}</td>
+                              <td><span className="badge-tag badge-tag--finding">{f.class_name}</span></td>
+                              <td className="font-mono">{f.volume_ml.toFixed(4)} mL</td>
+                              <td className="font-mono">
+                                [{f.centroid_physical_mm.map(c => c.toFixed(2)).join(', ')}]
+                              </td>
+                              <td className="font-mono">
+                                {f.bounding_box_mm.map(b => b.toFixed(1)).join(' × ')}
+                              </td>
+                              <td>{f.host_organ || 'Unassigned'}</td>
+                              <td><span className="badge-tag badge-tag--review">{f.review_requirement}</span></td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -312,27 +358,39 @@ export default function PreoperativeReportModal({ caseId, onClose }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {report.anatomical_structures?.map((s) => (
-                        <tr key={s.structure_id} className={!s.available ? 'row-unavailable' : ''}>
-                          <td className="font-bold">{s.display_name}</td>
-                          <td>
-                            {s.available ? (
-                              <span className="badge-tag badge-tag--available">Available</span>
-                            ) : (
-                              <span className="badge-tag badge-tag--unavailable">Unavailable</span>
-                            )}
-                          </td>
-                          <td className="font-mono">
-                            {s.volume_ml != null ? `${s.volume_ml.toFixed(2)} mL` : '—'}
-                          </td>
-                          <td className="font-mono">
-                            {s.centroid_physical_mm
-                              ? `[${s.centroid_physical_mm.map(c => c.toFixed(1)).join(', ')}]`
-                              : '—'}
-                          </td>
-                          <td className="text-muted text-sm">{s.availability_note || 'Segmented structure'}</td>
-                        </tr>
-                      ))}
+                      {report.anatomical_structures?.map((s) => {
+                        const interactive = s.available && typeof onSelectStructure === 'function';
+                        return (
+                          <tr
+                            key={s.structure_id}
+                            className={`${!s.available ? 'row-unavailable' : ''} ${interactive ? 'report-row-interactive' : ''}`}
+                            onClick={interactive ? () => handleInteractiveSelect(onSelectStructure, s.structure_id) : undefined}
+                            onKeyDown={interactive ? handleRowKeyDown(() => handleInteractiveSelect(onSelectStructure, s.structure_id)) : undefined}
+                            tabIndex={interactive ? 0 : undefined}
+                            role={interactive ? 'button' : undefined}
+                            aria-label={interactive ? `Select structure ${s.display_name} in workspace` : undefined}
+                            title={interactive ? 'Click to focus this structure in the workspace' : undefined}
+                          >
+                            <td className="font-bold">{s.display_name}</td>
+                            <td>
+                              {s.available ? (
+                                <span className="badge-tag badge-tag--available">Available</span>
+                              ) : (
+                                <span className="badge-tag badge-tag--unavailable">Unavailable</span>
+                              )}
+                            </td>
+                            <td className="font-mono">
+                              {s.volume_ml != null ? `${s.volume_ml.toFixed(2)} mL` : '—'}
+                            </td>
+                            <td className="font-mono">
+                              {s.centroid_physical_mm
+                                ? `[${s.centroid_physical_mm.map(c => c.toFixed(1)).join(', ')}]`
+                                : '—'}
+                            </td>
+                            <td className="text-muted text-sm">{s.availability_note || 'Segmented structure'}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -359,25 +417,40 @@ export default function PreoperativeReportModal({ caseId, onClose }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {report.spatial_relationships.map((rel, idx) => (
-                          <tr key={idx}>
-                            <td className="font-mono font-bold">{rel.finding_id}</td>
-                            <td>{rel.target_structure}</td>
-                            <td className="font-mono font-bold text-accent">
-                              {rel.min_distance_mm != null ? `${rel.min_distance_mm.toFixed(3)} mm` : 'N/A'}
-                            </td>
-                            <td className="font-mono">
-                              {rel.centroid_distance_mm != null ? `${rel.centroid_distance_mm.toFixed(3)} mm` : 'N/A'}
-                            </td>
-                            <td>
-                              {rel.overlap_detected ? (
-                                <span className="badge-tag badge-tag--overlap">Yes (Geometric Coincidence)</span>
-                              ) : (
-                                <span className="badge-tag badge-tag--no-overlap">No</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
+                        {report.spatial_relationships.map((rel, idx) => {
+                          // Safe to make interactive: target_structure is the
+                          // same authoritative structure_id used by the
+                          // Anatomy section — no identifier is invented here.
+                          const interactive = rel.available && rel.target_structure && typeof onSelectStructure === 'function';
+                          return (
+                            <tr
+                              key={idx}
+                              className={interactive ? 'report-row-interactive' : ''}
+                              onClick={interactive ? () => handleInteractiveSelect(onSelectStructure, rel.target_structure) : undefined}
+                              onKeyDown={interactive ? handleRowKeyDown(() => handleInteractiveSelect(onSelectStructure, rel.target_structure)) : undefined}
+                              tabIndex={interactive ? 0 : undefined}
+                              role={interactive ? 'button' : undefined}
+                              aria-label={interactive ? `Select structure ${rel.target_structure} in workspace` : undefined}
+                              title={interactive ? 'Click to focus this structure in the workspace' : undefined}
+                            >
+                              <td className="font-mono font-bold">{rel.finding_id}</td>
+                              <td>{rel.target_structure}</td>
+                              <td className="font-mono font-bold text-accent">
+                                {rel.min_distance_mm != null ? `${rel.min_distance_mm.toFixed(3)} mm` : 'N/A'}
+                              </td>
+                              <td className="font-mono">
+                                {rel.centroid_distance_mm != null ? `${rel.centroid_distance_mm.toFixed(3)} mm` : 'N/A'}
+                              </td>
+                              <td>
+                                {rel.overlap_detected ? (
+                                  <span className="badge-tag badge-tag--overlap">Yes (Geometric Coincidence)</span>
+                                ) : (
+                                  <span className="badge-tag badge-tag--no-overlap">No</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -395,17 +468,29 @@ export default function PreoperativeReportModal({ caseId, onClose }) {
                     <p className="report-empty-text">No planning targets recorded.</p>
                   ) : (
                     <ul className="report-target-list">
-                      {report.planning_targets.map((tgt) => (
-                        <li key={tgt.target_id} className="target-item">
-                          <div className="target-item-header">
-                            <span className="font-mono font-bold">{tgt.label}</span>
-                            <span className="provenance-tag-sm">{tgt.provenance}</span>
-                          </div>
-                          <div className="target-item-coords font-mono text-xs">
-                            Voxel: [{tgt.voxel_coordinate.join(', ')}] | Physical: [{tgt.physical_coordinate_mm.map(p => p.toFixed(1)).join(', ')}] mm
-                          </div>
-                        </li>
-                      ))}
+                      {report.planning_targets.map((tgt) => {
+                        const interactive = typeof onSelectTarget === 'function';
+                        return (
+                          <li
+                            key={tgt.target_id}
+                            className={`target-item ${interactive ? 'report-row-interactive' : ''}`}
+                            onClick={interactive ? () => handleInteractiveSelect(onSelectTarget, tgt.target_id) : undefined}
+                            onKeyDown={interactive ? handleRowKeyDown(() => handleInteractiveSelect(onSelectTarget, tgt.target_id)) : undefined}
+                            tabIndex={interactive ? 0 : undefined}
+                            role={interactive ? 'button' : undefined}
+                            aria-label={interactive ? `Select planning target ${tgt.label} in workspace` : undefined}
+                            title={interactive ? 'Click to focus this target in the workspace' : undefined}
+                          >
+                            <div className="target-item-header">
+                              <span className="font-mono font-bold">{tgt.label}</span>
+                              <span className="provenance-tag-sm">{tgt.provenance}</span>
+                            </div>
+                            <div className="target-item-coords font-mono text-xs">
+                              Voxel: [{tgt.voxel_coordinate.join(', ')}] | Physical: [{tgt.physical_coordinate_mm.map(p => p.toFixed(1)).join(', ')}] mm
+                            </div>
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                 </section>
@@ -419,17 +504,29 @@ export default function PreoperativeReportModal({ caseId, onClose }) {
                     <p className="report-empty-text">No user caliper measurements recorded in session.</p>
                   ) : (
                     <ul className="report-measurement-list">
-                      {report.planning_measurements.map((m) => (
-                        <li key={m.measurement_id} className="measurement-item">
-                          <div className="measurement-item-header">
-                            <span className="font-mono font-bold">{m.measurement_id.slice(0, 8)}</span>
-                            <span className="font-mono font-bold text-accent">{m.length_mm.toFixed(2)} mm</span>
-                          </div>
-                          <div className="text-xs text-muted">
-                            Plane: {m.slice_plane} (slice {m.slice_index}) | Label: {m.label || 'Unlabeled'}
-                          </div>
-                        </li>
-                      ))}
+                      {report.planning_measurements.map((m) => {
+                        const interactive = typeof onSelectMeasurement === 'function';
+                        return (
+                          <li
+                            key={m.measurement_id}
+                            className={`measurement-item ${interactive ? 'report-row-interactive' : ''}`}
+                            onClick={interactive ? () => handleInteractiveSelect(onSelectMeasurement, m.measurement_id) : undefined}
+                            onKeyDown={interactive ? handleRowKeyDown(() => handleInteractiveSelect(onSelectMeasurement, m.measurement_id)) : undefined}
+                            tabIndex={interactive ? 0 : undefined}
+                            role={interactive ? 'button' : undefined}
+                            aria-label={interactive ? `Select measurement ${m.measurement_id} in workspace` : undefined}
+                            title={interactive ? 'Click to focus this measurement in the workspace' : undefined}
+                          >
+                            <div className="measurement-item-header">
+                              <span className="font-mono font-bold">{m.measurement_id.slice(0, 8)}</span>
+                              <span className="font-mono font-bold text-accent">{m.length_mm.toFixed(2)} mm</span>
+                            </div>
+                            <div className="text-xs text-muted">
+                              Plane: {m.slice_plane} (slice {m.slice_index}) | Label: {m.label || 'Unlabeled'}
+                            </div>
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                 </section>

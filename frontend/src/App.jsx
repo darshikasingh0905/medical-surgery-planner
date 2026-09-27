@@ -758,6 +758,10 @@ function App() {
           setLesionVisibility={setLesionVisibility}
           targetVisibility={targetVisibility}
           setTargetVisibility={setTargetVisibility}
+          organOpacity={organOpacity}
+          onChangeOrganOpacity={setOrganOpacity}
+          lesionOpacity={lesionOpacity}
+          onChangeLesionOpacity={setLesionOpacity}
           selectedTarget={selectedTarget}
           setSelectedTarget={setSelectedTarget}
           selectedMeasurement={selectedMeasurement}

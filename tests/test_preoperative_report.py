@@ -470,3 +470,75 @@ def test_real_case_numerical_fidelity():
     assert report.provenance.summary_service == "PlanningSummaryService"
     assert report.provenance.explanation_service == "ProcedureExplanationService"
     assert report.provenance.deterministic_hash != ""
+
+
+# ==============================================================================
+# 7. DAY 25: Report Identifier Consistency (safety contract for interactive rows)
+# ==============================================================================
+
+def test_report_identifiers_match_live_authoritative_endpoints(client):
+    """
+    Day 25 makes report rows in PreoperativeReportModal clickable: clicking a
+    finding/structure/target/measurement row passes its report-schema ID back
+    to the workspace, which looks that ID up in its own already-loaded live
+    arrays (from /planning/targets, /planning/measurements, /structures,
+    /lesions) before calling the existing selection handlers. That design is
+    only safe if the report's IDs are exactly the same authoritative IDs the
+    live endpoints use — this test proves that invariant holds, rather than
+    trusting it implicitly.
+    """
+    # Findings: report finding_id must match a real lesion_id from /lesions
+    lesions_resp = client.get(f"/api/cases/{REAL_CASE_ID}/lesions")
+    assert lesions_resp.status_code == 200
+    live_lesion_ids = {l["lesion_id"] for l in lesions_resp.json()["lesions"]}
+
+    report = report_service.generate_report(REAL_CASE_ID, audience="technical")
+    report_finding_ids = {f.finding_id for f in report.computational_findings}
+    assert report_finding_ids and report_finding_ids.issubset(live_lesion_ids)
+
+    # Anatomy / spatial relationships: report structure_id must match a real
+    # structure_id from /structures
+    structs_resp = client.get(f"/api/cases/{REAL_CASE_ID}/structures")
+    assert structs_resp.status_code == 200
+    live_structure_ids = {s["structure_id"] for s in structs_resp.json()["structures"]}
+
+    report_structure_ids = {a.structure_id for a in report.anatomical_structures}
+    assert report_structure_ids.issubset(live_structure_ids)
+
+    available_rel_structure_ids = {
+        r.target_structure for r in report.spatial_relationships if r.available
+    }
+    assert available_rel_structure_ids.issubset(live_structure_ids)
+
+    # Planning targets: report target_id must match a real target_id from
+    # /planning/targets
+    targets_resp = client.get(f"/api/cases/{REAL_CASE_ID}/planning/targets")
+    assert targets_resp.status_code == 200
+    live_target_ids = {t["target_id"] for t in targets_resp.json()["targets"]}
+
+    report_target_ids = {t.target_id for t in report.planning_targets}
+    assert report_target_ids and report_target_ids.issubset(live_target_ids)
+
+    # Planning measurements: report measurement_id must match a real
+    # measurement_id from /planning/measurements. The golden case is kept
+    # measurement-free, so create one temporarily to exercise this path, then
+    # remove it — leaving the case pristine.
+    created = client.post(
+        f"/api/cases/{REAL_CASE_ID}/planning/measurements",
+        json={"start_voxel": [100, 100, 100], "end_voxel": [110, 100, 100], "label": "Day 25 ID-consistency check"},
+    )
+    assert created.status_code == 201
+    meas_id = created.json()["measurement_id"]
+    try:
+        live_meas_resp = client.get(f"/api/cases/{REAL_CASE_ID}/planning/measurements")
+        live_measurement_ids = {m["measurement_id"] for m in live_meas_resp.json()["measurements"]}
+
+        report_with_meas = report_service.generate_report(REAL_CASE_ID, audience="technical")
+        report_measurement_ids = {m.measurement_id for m in report_with_meas.planning_measurements}
+        assert report_measurement_ids and report_measurement_ids.issubset(live_measurement_ids)
+    finally:
+        client.delete(f"/api/cases/{REAL_CASE_ID}/planning/measurements/{meas_id}")
+
+    # Golden case restored to pristine measurement state
+    final = client.get(f"/api/cases/{REAL_CASE_ID}/planning/measurements")
+    assert final.json()["total_measurements"] == 0

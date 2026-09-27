@@ -4955,6 +4955,89 @@ body {
   align-items: center;
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   Day 25: Workspace Visualization Controls + Interactive Report Rows
+   ══════════════════════════════════════════════════════════════════ */
+
+.viz-controls-panel {
+  background: #0d131f;
+  border: 1px solid #1e293b;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  padding: 0.6rem 0.75rem;
+}
+
+.viz-control-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.3rem;
+}
+
+.viz-control-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.viz-control-val {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #38bdf8;
+  font-variant-numeric: tabular-nums;
+}
+
+.viz-opacity-slider {
+  width: 100%;
+  height: 4px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: linear-gradient(to right, #38bdf8 0%, rgba(56, 189, 248, 0.15) 100%);
+  border-radius: 4px;
+  cursor: pointer;
+  outline: none;
+}
+
+.viz-opacity-slider::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.6);
+  cursor: pointer;
+}
+
+.viz-opacity-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #38bdf8;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.6);
+}
+
+/* Interactive report rows (findings/anatomy/relationships tables,
+   target/measurement list items) — clickable navigation back into the
+   workspace's existing selection/focus mechanisms. */
+.report-row-interactive {
+  cursor: pointer;
+  transition: background-color 0.12s;
+}
+
+.report-row-interactive:hover,
+.report-row-interactive:focus-visible {
+  background: rgba(56, 189, 248, 0.08);
+  outline: none;
+}
+
+.report-row-interactive:focus-visible {
+  box-shadow: inset 0 0 0 2px rgba(56, 189, 248, 0.5);
+}
 
 
 

@@ -509,3 +509,99 @@ def test_loading_session_does_not_overwrite_persisted_state_with_defaults():
         },
     )
 
+
+# =====================================================================
+# 7. Day 25: Workspace Visualization Controls Session Persistence
+#    (organ opacity, lesion opacity, lesion visibility)
+# =====================================================================
+
+def test_organ_opacity_round_trip():
+    """Verify organ opacity persists and reloads correctly (both directions)."""
+    updated = planning_session_service.update_session(REAL_CASE_ID, {"organ_opacity": 0.4})
+    assert updated.organ_opacity == 0.4
+    assert planning_session_service.get_session(REAL_CASE_ID).organ_opacity == 0.4
+
+    updated2 = planning_session_service.update_session(REAL_CASE_ID, {"organ_opacity": 0.85})
+    assert updated2.organ_opacity == 0.85
+    assert planning_session_service.get_session(REAL_CASE_ID).organ_opacity == 0.85
+
+
+def test_lesion_opacity_round_trip():
+    """Verify lesion opacity persists and reloads correctly (both directions)."""
+    updated = planning_session_service.update_session(REAL_CASE_ID, {"lesion_opacity": 0.5})
+    assert updated.lesion_opacity == 0.5
+    assert planning_session_service.get_session(REAL_CASE_ID).lesion_opacity == 0.5
+
+    updated2 = planning_session_service.update_session(REAL_CASE_ID, {"lesion_opacity": 1.0})
+    assert updated2.lesion_opacity == 1.0
+    assert planning_session_service.get_session(REAL_CASE_ID).lesion_opacity == 1.0
+
+
+def test_visible_lesions_round_trip():
+    """Verify the per-lesion visibility map persists and reloads correctly."""
+    updated = planning_session_service.update_session(
+        REAL_CASE_ID, {"visible_lesions": {"cyst_left": False}}
+    )
+    assert updated.visible_lesions == {"cyst_left": False}
+    assert planning_session_service.get_session(REAL_CASE_ID).visible_lesions == {"cyst_left": False}
+
+    updated2 = planning_session_service.update_session(
+        REAL_CASE_ID, {"visible_lesions": {"cyst_left": True}}
+    )
+    assert updated2.visible_lesions == {"cyst_left": True}
+    assert planning_session_service.get_session(REAL_CASE_ID).visible_lesions == {"cyst_left": True}
+
+
+def test_api_put_session_visualization_fields_round_trip():
+    """REST-level verification: PUT session with all Day 25 visualization fields together."""
+    payload = {
+        "organ_opacity": 0.3,
+        "lesion_opacity": 0.6,
+        "visible_lesions": {"cyst_left": False},
+    }
+    res = client.put(f"/api/cases/{REAL_CASE_ID}/planning/session", json=payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["organ_opacity"] == 0.3
+    assert data["lesion_opacity"] == 0.6
+    assert data["visible_lesions"] == {"cyst_left": False}
+
+    # Confirm a fresh GET reflects the same persisted values (not silently reset)
+    get_res = client.get(f"/api/cases/{REAL_CASE_ID}/planning/session")
+    get_data = get_res.json()
+    assert get_data["organ_opacity"] == 0.3
+    assert get_data["lesion_opacity"] == 0.6
+    assert get_data["visible_lesions"] == {"cyst_left": False}
+
+    # Restore neutral defaults so later test runs in this module aren't affected
+    planning_session_service.update_session(
+        REAL_CASE_ID,
+        {"organ_opacity": 0.85, "lesion_opacity": 1.0, "visible_lesions": {"cyst_left": True}},
+    )
+
+
+def test_loading_session_does_not_overwrite_visualization_state_with_defaults():
+    """
+    AUDIT (Day 25, Part 3): extends the existing no-save-loop audit to the
+    newly-persisted visualization fields — reading a session already in a
+    non-default visualization state must never reset it back to defaults.
+    """
+    planning_session_service.update_session(
+        REAL_CASE_ID,
+        {"organ_opacity": 0.25, "lesion_opacity": 0.55, "visible_lesions": {"cyst_left": False}},
+    )
+
+    first_load = client.get(f"/api/cases/{REAL_CASE_ID}/planning/session").json()
+    second_load = client.get(f"/api/cases/{REAL_CASE_ID}/planning/session").json()
+
+    assert first_load["organ_opacity"] == 0.25
+    assert first_load["lesion_opacity"] == 0.55
+    assert first_load["visible_lesions"] == {"cyst_left": False}
+    assert second_load == first_load
+
+    # Restore neutral defaults so later test runs in this module aren't affected
+    planning_session_service.update_session(
+        REAL_CASE_ID,
+        {"organ_opacity": 0.85, "lesion_opacity": 1.0, "visible_lesions": {"cyst_left": True}},
+    )
+

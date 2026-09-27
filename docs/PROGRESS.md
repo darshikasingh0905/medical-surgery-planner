@@ -1,9 +1,9 @@
 # Project Progress Report: AI-Assisted Preoperative Planning System
 
-**Document Version:** 1.11  
-**Last Updated:** September 2026 (Day 24 Completed)  
+**Document Version:** 1.12  
+**Last Updated:** September 2026 (Day 25 Completed)  
 **Target Repository:** `medical-surgery-planner`  
-**Current Status:** Preoperative Planning Workspace Active | Full-Stack Workstation Dashboard | Synchronized 3D + MPR Viewport | Advanced Planning Measurements (Target↔Target, Target↔Structure, Structure↔Structure) | Planning Annotation Editing & Lesion→Annotation Integration | Complete MPR Session Persistence | Persistent Planning Session State | Coordinate System Audit Hardened | Deterministic Procedure Explanation Engine | Preoperative Report & PDF Export Layer | Vite Build Clean (0 errors)
+**Current Status:** Preoperative Planning Workspace Active | Full-Stack Workstation Dashboard | Synchronized 3D + MPR Viewport | Interactive Preoperative Report (click-to-focus) | Workspace Organ/Lesion Opacity & Lesion Visibility Controls | Advanced Planning Measurements (Target↔Target, Target↔Structure, Structure↔Structure) | Planning Annotation Editing & Lesion→Annotation Integration | Complete MPR + Visualization Session Persistence | Coordinate System Audit Hardened | Deterministic Procedure Explanation Engine | Preoperative Report & PDF Export Layer | Vite Build Clean (0 errors)
 
 
 ---
@@ -37,10 +37,12 @@ The system emphasizes **clinical safety, deterministic reproducibility, and stri
 | **Lesion REST API Endpoints** | **Completed** | FastAPI | `GET /lesions`, `GET /lesions/{id}` with cached + dynamic metrics |
 | **Multi-Planar Reconstruction (MPR)** | **Completed** | NumPy, Pillow, FastAPI | Sub-millisecond Axial/Coronal/Sagittal streaming, HU windowing, synchronized crosshairs |
 | **Planning Markers & Annotation Layer**| **Completed** | FastAPI, React, Three.js | Unified target model, atomic JSON persistence, 2D/3D synchronized markers, click-to-annotate UX |
-| **Automated Verification Suite** | **Active (100% Pass)** | `pytest` (262 tests) | 262 passed, 0 skipped, 0 failed |
+| **Automated Verification Suite** | **Active (100% Pass)** | `pytest` (268 tests) | 268 passed, 0 skipped, 0 failed |
 | **Preoperative Report & PDF Export** | **Completed** | Pydantic, ReportLab, React | 15-section JSON report + A4 PDF, technical/general audiences |
 | **Advanced Planning Measurements** | **Completed** | FastAPI, React | Target↔Target, Target↔Structure, Structure↔Structure UI |
 | **Planning Annotation Editing & Lesion→Annotation** | **Completed** | FastAPI, React | Edit label/notes on user annotations; create annotation from a model finding |
+| **Interactive Preoperative Report** | **Completed** | React | Click-to-focus on findings/anatomy/relationships/targets/measurements |
+| **Workspace Visualization Controls** | **Completed** | React, FastAPI | Organ/lesion opacity sliders, per-lesion visibility toggle, session-persisted |
 
 ---
 
@@ -495,7 +497,42 @@ python -m pytest tests/ -v
 
 ---
 
-## 15. Active Blockers & Next Steps
+## 15. Day 25 Milestone: Interactive Preoperative Report + Workspace Visualization Controls
+
+- **Interactive Report**: `PreoperativeReportModal.jsx` rows for computational
+  findings, anatomical structures (available only), spatial relationships
+  (available only, via the same `target_structure` identifier used by the
+  Anatomy section), planning targets, and planning measurements are now
+  clickable. Each click passes only an authoritative ID back to
+  `PlanningWorkspace`, which looks that ID up in its own already-loaded live
+  arrays and reuses the exact existing `handleSelectFinding` /
+  `handleSelectStructureItem` / `handleSelectTargetItem` /
+  `handleSelectMeasurementItem` handlers — the same ones the Explanation tab
+  already used. The modal closes on selection so the resulting MPR/3D focus is
+  visible. No coordinate math, no new backend endpoints, no changes to report
+  generation.
+- **Workspace Visualization Controls**: `PlanningWorkspace.jsx` gained a
+  collapsible "🎚️ Visualization" panel (organ transparency + lesion opacity
+  sliders, same 0.1–1.0 range and 0.85/1.0 defaults as the Standard View's
+  Sidebar) and a per-lesion 👁️ visibility toggle on each finding card — reusing
+  the exact same `organOpacity`/`lesionOpacity`/`lesionVisibility` state
+  App.jsx already owned (only newly threaded through as props to
+  `PlanningWorkspace`, which previously never received them). No second
+  opacity or visibility state was created.
+- **Session Persistence**: `organ_opacity`, `lesion_opacity`, and
+  `visible_lesions` now round-trip through the existing debounced
+  `triggerSessionSave` → `updatePlanningSession` mechanism — the backend
+  `PlanningSession` schema already supported all three fields, so no backend
+  schema change was needed. `visible_targets` was investigated and found to
+  have no corresponding Workspace control yet, so it remains unpersisted this
+  milestone (see `docs/DAY25.md` limitations).
+- **Quality Assurance**: see `docs/DAY25.md` for exact test counts, real-case
+  validation, and governance audit results.
+- **Documentation**: [`docs/DAY25.md`](DAY25.md) — full milestone report.
+
+---
+
+## 16. Active Blockers & Next Steps
 
 ### Active Blockers:
 * **None**
@@ -504,14 +541,19 @@ python -m pytest tests/ -v
 1. Embed MPR slice captures directly into the PDF report (currently tabular/text only)
 2. Multi-point surgical polyline / resection boundary estimation and curved-planar reformation (CPR)
 3. Specialized vascular sub-segmentation integration (e.g. TotalSegmentator tissue/vessel models)
-4. Frontend automated test harness (none currently exists — Days 23–24's frontend
+4. Frontend automated test harness (none currently exists — Days 23–25's frontend
    changes were validated via manual build + backend API-level regression tests)
 5. Backend-level duplicate-annotation guard for `create_annotation_from_lesion`
    (currently a frontend-only UX guard — see `docs/DAY24.md` limitations)
+6. Workspace target-visibility toggle + `visible_targets` session persistence
+   (no corresponding UI control exists yet — see `docs/DAY25.md` limitations)
+7. Reduce duplicated select/focus/opacity logic between `App.jsx` (Standard
+   View) and `PlanningWorkspace.jsx` (Workspace View) — a pre-existing
+   architectural note, growing slightly with each added control
 
 ---
 
-## 16. Medical Safety & Clinical Governance
+## 17. Medical Safety & Clinical Governance
 
 * **Investigational Use Only**: This software is an engineering prototype designed for research and educational preoperative planning. It is not FDA/CE cleared as a primary diagnostic device.
 * **Human-in-the-Loop Review**: All segmentations, 3D meshes, and quantitative measurements must be verified by a board-certified radiologist or surgical specialist before any operative procedure.
