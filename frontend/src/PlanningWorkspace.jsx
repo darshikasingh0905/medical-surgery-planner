@@ -16,6 +16,9 @@ import {
   createTargetToTargetMeasurement,
   createTargetToStructureMeasurement,
   createStructureToStructureMeasurement,
+  getPlanningTargets,
+  updatePlanningAnnotation,
+  createAnnotationFromLesion,
 } from './api';
 
 /**
@@ -111,6 +114,17 @@ const PlanningWorkspace = ({
   const [advError, setAdvError] = useState(null);
   const [advSubmitting, setAdvSubmitting] = useState(false);
 
+  // Planning annotation editing state (Day 24) — user-entered annotations only.
+  const [editingAnnotationId, setEditingAnnotationId] = useState(null);
+  const [editLabel, setEditLabel] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState(null);
+
+  // Lesion -> annotation creation state (Day 24)
+  const [creatingAnnotationForLesion, setCreatingAnnotationForLesion] = useState(null);
+  const [lesionAnnotationError, setLesionAnnotationError] = useState(null); // { lesionId, message }
+
   // Debounce ref for session persistence
   const saveTimerRef = useRef(null);
 
@@ -162,6 +176,15 @@ const PlanningWorkspace = ({
       isCancelled = true;
     };
   }, [caseId, setViewMode, setVoxelCursor, setMprWindowPreset, setMprWindowWidth, setMprWindowLevel, setMprShowLesionOverlay]);
+
+  // ── Guard: never keep annotation-edit state pointed at a stale selection ──
+  // (Day 24 Part 4: "do not silently overwrite another annotation")
+  useEffect(() => {
+    if (editingAnnotationId && selectedTarget?.target_id !== editingAnnotationId) {
+      setEditingAnnotationId(null);
+      setEditError(null);
+    }
+  }, [selectedTarget, editingAnnotationId]);
 
   // ── Sync Session Updates to Backend ──────────────────────────────────────
   const triggerSessionSave = useCallback(
@@ -481,6 +504,83 @@ const PlanningWorkspace = ({
     }
   }, [caseId, advType, advFieldA, advFieldB, setMeasurements, handleSelectMeasurementItem]);
 
+  // ── Planning Annotation Editing (Day 24) ─────────────────────────────────
+  // Exposes the existing, already-tested updatePlanningAnnotation contract.
+  // Only ever operates on user-sourced annotations (model targets are not
+  // persisted in annotations.json and cannot be edited through this endpoint).
+  const handleStartEditAnnotation = useCallback((target) => {
+    setEditingAnnotationId(target.target_id);
+    setEditLabel(target.label || '');
+    setEditNotes(target.notes || '');
+    setEditError(null);
+  }, []);
+
+  const handleCancelEditAnnotation = useCallback(() => {
+    setEditingAnnotationId(null);
+    setEditError(null);
+  }, []);
+
+  const handleSaveEditAnnotation = useCallback(async () => {
+    if (!caseId || !editingAnnotationId) return;
+    if (!editLabel.trim()) {
+      setEditError('Label cannot be empty.');
+      return;
+    }
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      const updated = await updatePlanningAnnotation(caseId, editingAnnotationId, {
+        label: editLabel,
+        notes: editNotes,
+      });
+
+      // Refresh the authoritative combined target list rather than trusting
+      // only the PUT response.
+      const refreshed = await getPlanningTargets(caseId);
+      const list = refreshed.targets ?? [];
+      setPlanningTargets(list);
+
+      const match = list.find((t) => t.target_id === updated.target_id) || updated;
+      handleSelectTargetItem(match);
+      setEditingAnnotationId(null);
+    } catch (err) {
+      setEditError(err.message || 'Failed to update annotation.');
+    } finally {
+      setEditSaving(false);
+    }
+  }, [caseId, editingAnnotationId, editLabel, editNotes, setPlanningTargets, handleSelectTargetItem]);
+
+  // ── Lesion → Planning Annotation (Day 24) ────────────────────────────────
+  // Exposes the existing createAnnotationFromLesion contract. Duplicate
+  // creation is prevented by checking whether a user annotation already
+  // references this lesion_id; the lesion result itself is never modified.
+  const handleCreateAnnotationFromLesion = useCallback(
+    async (lesionId) => {
+      if (!caseId) return;
+      setLesionAnnotationError(null);
+      setCreatingAnnotationForLesion(lesionId);
+      try {
+        const created = await createAnnotationFromLesion(caseId, lesionId);
+
+        const refreshed = await getPlanningTargets(caseId);
+        const list = refreshed.targets ?? [];
+        setPlanningTargets(list);
+
+        const match = list.find((t) => t.target_id === created.target_id) || created;
+        setTargetVisibility((prev) => ({ ...prev, [match.target_id]: true }));
+        handleSelectTargetItem(match);
+      } catch (err) {
+        setLesionAnnotationError({
+          lesionId,
+          message: err.message || 'Failed to create annotation from finding.',
+        });
+      } finally {
+        setCreatingAnnotationForLesion(null);
+      }
+    },
+    [caseId, setPlanningTargets, setTargetVisibility, handleSelectTargetItem]
+  );
+
   // ── CT Scan Info Formatting ──────────────────────────────────────────────
   const scanMeta = summaryData?.scan_info || mprMetadata;
   const shapeStr = scanMeta?.shape ? `${scanMeta.shape[0]} × ${scanMeta.shape[1]} × ${scanMeta.shape[2]}` : '293 × 293 × 344';
@@ -620,6 +720,10 @@ const PlanningWorkspace = ({
                   findingsList.map((f) => {
                     const isSelected = selectedLesion?.lesion_id === f.lesion_id;
                     const classConfig = LESION_VISUAL_CONFIG[f.class_name] || LESION_VISUAL_CONFIG.cyst;
+                    const existingAnnotation = planningTargets.find(
+                      (t) => t.source === 'user' && t.lesion_id === f.lesion_id
+                    );
+                    const isCreatingAnnotation = creatingAnnotationForLesion === f.lesion_id;
                     return (
                       <div
                         key={f.lesion_id}
@@ -664,6 +768,41 @@ const PlanningWorkspace = ({
                             </span>
                           </div>
                         </div>
+
+                        {/* Lesion -> Planning Annotation (Day 24) */}
+                        <div className="finding-annotate-row">
+                          {existingAnnotation ? (
+                            <button
+                              type="button"
+                              className="finding-annotate-btn finding-annotate-btn--exists"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectTargetItem(existingAnnotation);
+                              }}
+                              title="A planning annotation for this finding already exists — select it"
+                            >
+                              📌 View Annotation
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="finding-annotate-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCreateAnnotationFromLesion(f.lesion_id);
+                              }}
+                              disabled={isCreatingAnnotation}
+                              title="Create a user-editable planning annotation anchored to this model finding"
+                            >
+                              {isCreatingAnnotation ? 'Creating…' : '📌 Create Annotation'}
+                            </button>
+                          )}
+                        </div>
+                        {lesionAnnotationError?.lesionId === f.lesion_id && (
+                          <p className="adv-meas-error" onClick={(e) => e.stopPropagation()}>
+                            {lesionAnnotationError.message}
+                          </p>
+                        )}
                       </div>
                     );
                   })
@@ -965,8 +1104,64 @@ const PlanningWorkspace = ({
                 <div className="inspector-badge-row">
                   <span className="item-type-badge item-type-badge--target">Planning Target</span>
                   <span className="item-source-badge">{selectedTarget.source?.toUpperCase()}</span>
+                  {selectedTarget.source === 'user' && editingAnnotationId !== selectedTarget.target_id && (
+                    <button
+                      type="button"
+                      className="ann-edit-btn"
+                      onClick={() => handleStartEditAnnotation(selectedTarget)}
+                      title="Edit this user-entered annotation's label and notes"
+                    >
+                      ✏️ Edit
+                    </button>
+                  )}
                 </div>
-                <h4 className="inspector-title">{selectedTarget.label}</h4>
+
+                {editingAnnotationId === selectedTarget.target_id ? (
+                  <div className="ann-edit-form" id="annotation-edit-form">
+                    <label className="ann-edit-field">
+                      <span className="adv-meas-field-label">Label</span>
+                      <input
+                        type="text"
+                        className="adv-meas-select"
+                        value={editLabel}
+                        onChange={(e) => setEditLabel(e.target.value)}
+                        maxLength={120}
+                      />
+                    </label>
+                    <label className="ann-edit-field">
+                      <span className="adv-meas-field-label">Notes (user-entered)</span>
+                      <textarea
+                        className="ann-edit-textarea"
+                        value={editNotes}
+                        onChange={(e) => setEditNotes(e.target.value)}
+                        maxLength={1000}
+                        rows={3}
+                      />
+                    </label>
+                    {editError && <p className="adv-meas-error">{editError}</p>}
+                    <div className="ann-edit-actions">
+                      <button
+                        type="button"
+                        className="adv-meas-submit-btn"
+                        onClick={handleSaveEditAnnotation}
+                        disabled={editSaving || !editLabel.trim()}
+                      >
+                        {editSaving ? 'Saving…' : '💾 Save'}
+                      </button>
+                      <button
+                        type="button"
+                        className="tool-pill tool-pill--sm"
+                        onClick={handleCancelEditAnnotation}
+                        disabled={editSaving}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <h4 className="inspector-title">{selectedTarget.label}</h4>
+                )}
+
                 <div className="inspector-meta-table">
                   <div className="meta-row">
                     <span className="meta-k">Target ID:</span>
@@ -984,7 +1179,7 @@ const PlanningWorkspace = ({
                       {selectedTarget.physical_coordinate ? `[${selectedTarget.physical_coordinate.join(', ')}] mm` : 'N/A'}
                     </span>
                   </div>
-                  {selectedTarget.notes && (
+                  {selectedTarget.notes && editingAnnotationId !== selectedTarget.target_id && (
                     <div className="meta-row" style={{ gridColumn: 'span 2' }}>
                       <span className="meta-k">Notes:</span>
                       <span className="meta-v">{selectedTarget.notes}</span>

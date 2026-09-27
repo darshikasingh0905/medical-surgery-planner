@@ -375,3 +375,150 @@ def test_mpr_cross_plane_synchronization():
     recon_sagittal = display_to_voxel_crosshair("sagittal", sagittal_col, sagittal_row, target_voxel, shape)
     assert recon_sagittal == target_voxel
 
+
+# ---------------------------------------------------------------------------
+# Day 24: Planning Annotation & Finding Integration
+# ---------------------------------------------------------------------------
+
+def test_update_annotation_partial_preserves_other_fields(client, temp_case):
+    """
+    Day 24: the annotation-edit UI only ever sends {label, notes} — verify a
+    partial update leaves voxel/physical coordinates, target_id, source, and
+    target_type completely untouched (no coordinate recalculation, no field
+    clobbering from an omitted field).
+    """
+    case_id, _ = temp_case
+    created = client.post(
+        f"/api/cases/{case_id}/planning/annotations",
+        json={
+            "label": "Original Label",
+            "voxel_coordinate": [50, 60, 70],
+            "notes": "Original notes",
+        },
+    ).json()
+
+    updated = client.put(
+        f"/api/cases/{case_id}/planning/annotations/{created['target_id']}",
+        json={"label": "Renamed Label", "notes": "Revised notes"},
+    )
+    assert updated.status_code == 200
+    data = updated.json()
+
+    assert data["label"] == "Renamed Label"
+    assert data["notes"] == "Revised notes"
+    # Everything else must be preserved exactly
+    assert data["target_id"] == created["target_id"]
+    assert data["source"] == created["source"] == "user"
+    assert data["target_type"] == created["target_type"]
+    assert data["voxel_coordinate"] == created["voxel_coordinate"] == [50, 60, 70]
+    assert data["physical_coordinate"] == created["physical_coordinate"]
+
+
+def test_update_nonexistent_annotation_returns_404(client, temp_case):
+    """Day 24: updating an annotation ID that doesn't exist must 404, not create one."""
+    case_id, _ = temp_case
+    res = client.put(
+        f"/api/cases/{case_id}/planning/annotations/ann_doesnotexist",
+        json={"label": "Should not apply"},
+    )
+    assert res.status_code == 404
+
+
+def test_annotation_from_lesion_preserves_provenance_and_does_not_modify_lesion_data(client, temp_case):
+    """
+    Day 24: an annotation created from a model finding must be tagged
+    source='user' (a user-authored reference to a model finding, not itself a
+    model object), retain the originating lesion_id, and must never modify the
+    underlying lesions.json result it was derived from.
+    """
+    case_id, case_path = temp_case
+    lesions_file = case_path / "measurements" / "lesions.json"
+    before = lesions_file.read_text(encoding="utf-8")
+
+    res = client.post(
+        f"/api/cases/{case_id}/planning/annotations/from-lesion/cyst_left",
+        json={"label": "Renal Lesion Reference"},
+    )
+    assert res.status_code == 201
+    data = res.json()
+    assert data["source"] == "user"
+    assert data["target_type"] == "lesion"
+    assert data["lesion_id"] == "cyst_left"
+    assert data["target_id"].startswith("ann_")
+
+    after = lesions_file.read_text(encoding="utf-8")
+    assert after == before, "Creating an annotation must never modify the source lesion result"
+
+
+def test_duplicate_annotation_from_same_lesion_is_a_ui_guard_not_a_backend_rule(client, temp_case):
+    """
+    Characterizes existing (unmodified) backend behavior: calling
+    create_annotation_from_lesion twice for the same lesion_id is NOT rejected
+    by the backend — it creates two independent annotations with different
+    target_ids. Day 24 does not add backend deduplication; the PlanningWorkspace
+    UI instead checks the existing planning-targets list for a user annotation
+    already referencing that lesion_id before offering to create another.
+    """
+    case_id, _ = temp_case
+    first = client.post(f"/api/cases/{case_id}/planning/annotations/from-lesion/cyst_left", json={})
+    second = client.post(f"/api/cases/{case_id}/planning/annotations/from-lesion/cyst_left", json={})
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json()["target_id"] != second.json()["target_id"]
+
+
+def test_real_case_annotation_lifecycle_golden_case_protection(client):
+    """
+    Day 24 real-case validation: exercises create-from-lesion, update, and
+    delete against the golden KiTS23 case using only existing authoritative
+    endpoints, then restores the case to its pre-test annotation count so no
+    permanent data is introduced.
+    """
+    real_case_id = "b2f89382-9416-4e94-9486-b00c6b1de64b"
+    real_case_path = Path("outputs/cases") / real_case_id
+    if not real_case_path.is_dir():
+        pytest.skip(f"Real case {real_case_id} not found on disk")
+
+    baseline = client.get(f"/api/cases/{real_case_id}/planning/annotations")
+    assert baseline.status_code == 200
+    baseline_count = baseline.json()["total_annotations"]
+
+    ann_id = None
+    try:
+        created = client.post(
+            f"/api/cases/{real_case_id}/planning/annotations/from-lesion/cyst_left",
+            json={"label": "Day 24 validation annotation"},
+        )
+        assert created.status_code == 201
+        created_data = created.json()
+        ann_id = created_data["target_id"]
+        assert created_data["source"] == "user"
+        assert created_data["lesion_id"] == "cyst_left"
+        # Matches the known real-case cyst centroid (see test_real_case_planning_target)
+        assert created_data["voxel_coordinate"] == [110, 89, 218]
+        assert created_data["physical_coordinate"] == [164.868, 133.104, 327.363]
+
+        updated = client.put(
+            f"/api/cases/{real_case_id}/planning/annotations/{ann_id}",
+            json={"notes": "Day 24 validation note — temporary."},
+        )
+        assert updated.status_code == 200
+        assert updated.json()["notes"] == "Day 24 validation note — temporary."
+        # Coordinates must remain exactly as created
+        assert updated.json()["voxel_coordinate"] == [110, 89, 218]
+    finally:
+        if ann_id:
+            client.delete(f"/api/cases/{real_case_id}/planning/annotations/{ann_id}")
+
+    restored = client.get(f"/api/cases/{real_case_id}/planning/annotations")
+    assert restored.json()["total_annotations"] == baseline_count
+
+    # Model-predicted target and unavailable anatomy must be completely unaffected
+    targets = client.get(f"/api/cases/{real_case_id}/planning/targets").json()
+    model_target = next(t for t in targets["targets"] if t["target_id"] == "model_cyst_left")
+    assert model_target["voxel_coordinate"] == [110, 89, 218]
+
+    structs = {s["structure_id"]: s for s in client.get(f"/api/cases/{real_case_id}/structures").json()["structures"]}
+    for unavailable in ("renal_artery", "renal_vein", "renal_pelvis", "ureter"):
+        assert structs[unavailable]["available"] is False
+
