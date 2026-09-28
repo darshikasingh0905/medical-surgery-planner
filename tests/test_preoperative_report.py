@@ -35,7 +35,12 @@ from src.planning.report_models import (
     ReportProvenance,
     ReportGovernance,
 )
-from src.planning.report_service import PreoperativeReportService, report_service
+from src.planning.report_service import (
+    PreoperativeReportService,
+    report_service,
+    build_pdf_document,
+    _resolve_report_center_voxel,
+)
 
 REAL_CASE_ID = "b2f89382-9416-4e94-9486-b00c6b1de64b"
 
@@ -542,3 +547,275 @@ def test_report_identifiers_match_live_authoritative_endpoints(client):
     # Golden case restored to pristine measurement state
     final = client.get(f"/api/cases/{REAL_CASE_ID}/planning/measurements")
     assert final.json()["total_measurements"] == 0
+
+
+# ==============================================================================
+# 8. DAY 26: Preoperative Imaging Reference Views (embedded CT slice imagery)
+# ==============================================================================
+
+def _tiny_png_bytes(size=(10, 10), fill=0) -> bytes:
+    """
+    A minimal valid PNG for mocking mpr_manager.get_slice_bytes in unit tests.
+    `fill` must differ between calls in the same test: ReportLab deduplicates
+    byte-identical embedded images into a single shared XObject, so returning
+    the same bytes for all three planes would (correctly) collapse to one
+    embedded image rather than three, even though three distinct planes were
+    genuinely requested and rendered.
+    """
+    from PIL import Image as PILImage
+    import io as _io
+    buf = _io.BytesIO()
+    PILImage.new("L", size, color=fill).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _minimal_report(
+    computational_findings=None,
+    planning_targets=None,
+    dimensions=None,
+) -> PreoperativeReport:
+    """Builds a minimal-but-valid PreoperativeReport for build_pdf_document unit tests."""
+    return PreoperativeReport(
+        metadata=ReportMetadata(
+            report_id="rep_test_day26",
+            case_id="unit-test-case",
+            target_audience="technical",
+            generated_at_utc=datetime.now(timezone.utc).isoformat(),
+        ),
+        case_overview=ReportCaseOverview(case_id="unit-test-case", status="completed"),
+        imaging_info=ReportImagingInfo(dimensions=dimensions),
+        computational_findings=computational_findings or [],
+        planning_targets=planning_targets or [],
+        governance=ReportGovernance(),
+        provenance=ReportProvenance(
+            report_generator="PreoperativeReportService",
+            summary_service="PlanningSummaryService",
+            explanation_service="ProcedureExplanationService",
+            deterministic_hash="unittest",
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# 8.1 Deterministic center-voxel fallback chain (pure logic, no I/O)
+# ---------------------------------------------------------------------------
+
+def test_resolve_center_voxel_prefers_finding_centroid():
+    """Finding centroid takes priority over a planning target when both exist."""
+    report = _minimal_report(
+        computational_findings=[
+            ReportFindingItem(finding_id="cyst_left", class_name="cyst", centroid_voxel=[1, 2, 3])
+        ],
+        planning_targets=[
+            ReportPlanningTargetItem(
+                target_id="ann_x", label="Point", voxel_coordinate=[9, 9, 9],
+                physical_coordinate_mm=[9.0, 9.0, 9.0],
+            )
+        ],
+        dimensions=[100, 100, 100],
+    )
+    voxel, source = _resolve_report_center_voxel(report)
+    assert voxel == [1, 2, 3]
+    assert "cyst_left" in source
+
+
+def test_resolve_center_voxel_falls_back_to_planning_target():
+    """No finding centroid -> falls back to the first planning target."""
+    report = _minimal_report(
+        computational_findings=[],
+        planning_targets=[
+            ReportPlanningTargetItem(
+                target_id="ann_solo", label="Solo Point", voxel_coordinate=[5, 6, 7],
+                physical_coordinate_mm=[5.0, 6.0, 7.0],
+            )
+        ],
+        dimensions=[100, 100, 100],
+    )
+    voxel, source = _resolve_report_center_voxel(report)
+    assert voxel == [5, 6, 7]
+    assert "ann_solo" in source
+
+
+def test_resolve_center_voxel_falls_back_to_volume_center():
+    """No finding, no target -> falls back to the CT volume center."""
+    report = _minimal_report(computational_findings=[], planning_targets=[], dimensions=[100, 200, 300])
+    voxel, source = _resolve_report_center_voxel(report)
+    assert voxel == [50, 100, 150]
+    assert "volume center" in source.lower()
+
+
+def test_resolve_center_voxel_returns_none_when_no_data():
+    """No finding, no target, no dimensions -> explicit None, never a fabricated voxel."""
+    report = _minimal_report(computational_findings=[], planning_targets=[], dimensions=None)
+    voxel, source = _resolve_report_center_voxel(report)
+    assert voxel is None
+    assert "unavailable" in source.lower()
+
+
+# ---------------------------------------------------------------------------
+# 8.2 PDF embedding: exact rendering-path parameters (mocked slice generation)
+# ---------------------------------------------------------------------------
+
+def test_pdf_generation_uses_expected_planes_window_and_overlay(monkeypatch):
+    """
+    Verifies the exact contract Day 26 is required to preserve: three planes
+    (axial/coronal/sagittal), centered on the known finding centroid, using
+    the soft-tissue window (WW 400 / WL 40), with lesion overlay enabled —
+    all passed through unmodified to the existing, already-tested
+    mpr_manager.get_slice_bytes() rendering path.
+    """
+    calls = []
+
+    def fake_get_slice_bytes(case_id, plane, index, window_width=400.0, window_level=40.0, overlay_lesion=True):
+        calls.append({
+            "case_id": case_id, "plane": plane, "index": index,
+            "window_width": window_width, "window_level": window_level,
+            "overlay_lesion": overlay_lesion,
+        })
+        # Distinct fill per plane so ReportLab embeds 3 separate images
+        # rather than deduplicating byte-identical streams (see _tiny_png_bytes).
+        return _tiny_png_bytes(fill=len(calls) * 40)
+
+    # report_service imports mpr_manager locally inside build_pdf_document, so
+    # patch the singleton at its source module — the local import will still
+    # resolve to this same, now-patched object.
+    from src.visualization import mpr as mpr_module
+    monkeypatch.setattr(mpr_module.mpr_manager, "get_slice_bytes", fake_get_slice_bytes)
+
+    report = _minimal_report(
+        computational_findings=[
+            ReportFindingItem(
+                finding_id="cyst_left", class_name="cyst", centroid_voxel=[110, 89, 218],
+            )
+        ],
+        dimensions=[293, 293, 344],
+    )
+    report.metadata.case_id = "b2f89382-9416-4e94-9486-b00c6b1de64b"
+
+    pdf_bytes = build_pdf_document(report)
+    assert pdf_bytes.startswith(b"%PDF-")
+    assert b"%%EOF" in pdf_bytes
+
+    assert len(calls) == 3
+    called_planes = {c["plane"] for c in calls}
+    assert called_planes == {"axial", "coronal", "sagittal"}
+    for c in calls:
+        assert c["case_id"] == "b2f89382-9416-4e94-9486-b00c6b1de64b"
+        assert c["window_width"] == 400.0
+        assert c["window_level"] == 40.0
+        assert c["overlay_lesion"] is True
+
+    by_plane = {c["plane"]: c["index"] for c in calls}
+    # voxel [110, 89, 218] = [x, y, z] -> axial uses z, coronal uses y, sagittal uses x
+    assert by_plane["axial"] == 218
+    assert by_plane["coronal"] == 89
+    assert by_plane["sagittal"] == 110
+
+    # Exactly 3 images actually embedded in the resulting PDF
+    assert pdf_bytes.count(b"/Subtype /Image") == 3
+
+
+def test_pdf_builds_successfully_with_volume_center_fallback(monkeypatch):
+    """
+    Day 26 Part 9: a case with no computational finding and no planning target
+    must still produce a valid PDF, using the CT volume center.
+    """
+    from src.visualization import mpr as mpr_module
+    fallback_calls = []
+
+    def fake_get_slice_bytes(case_id, plane, index, **kwargs):
+        fallback_calls.append(plane)
+        # Distinct fill per call so ReportLab doesn't dedupe the 3 images.
+        return _tiny_png_bytes(fill=len(fallback_calls) * 40)
+
+    monkeypatch.setattr(mpr_module.mpr_manager, "get_slice_bytes", fake_get_slice_bytes)
+
+    report = _minimal_report(computational_findings=[], planning_targets=[], dimensions=[100, 120, 140])
+    pdf_bytes = build_pdf_document(report)
+
+    assert pdf_bytes.startswith(b"%PDF-")
+    assert b"%%EOF" in pdf_bytes
+    assert pdf_bytes.count(b"/Subtype /Image") == 3
+
+
+def test_pdf_handles_image_generation_failure_gracefully(monkeypatch):
+    """
+    Day 26 Part 10: if slice generation fails, the PDF must still build
+    successfully with a graceful limitation notice — never a crash, never a
+    fabricated image.
+    """
+    from src.visualization import mpr as mpr_module
+
+    def failing_get_slice_bytes(*args, **kwargs):
+        raise FileNotFoundError("mock: CT volume not available")
+
+    monkeypatch.setattr(mpr_module.mpr_manager, "get_slice_bytes", failing_get_slice_bytes)
+
+    report = _minimal_report(
+        computational_findings=[
+            ReportFindingItem(finding_id="cyst_left", class_name="cyst", centroid_voxel=[10, 10, 10])
+        ],
+        dimensions=[100, 100, 100],
+    )
+    pdf_bytes = build_pdf_document(report)
+
+    assert pdf_bytes.startswith(b"%PDF-")
+    assert b"%%EOF" in pdf_bytes
+    # No images were fabricated when generation fails for every plane
+    assert pdf_bytes.count(b"/Subtype /Image") == 0
+
+
+# ---------------------------------------------------------------------------
+# 8.3 Real-case PDF verification (technical + general audiences)
+# ---------------------------------------------------------------------------
+
+def test_real_case_pdf_contains_three_embedded_images_technical(client):
+    """Real golden case: technical-audience PDF embeds exactly 3 CT slice images."""
+    resp = client.get(f"/api/cases/{REAL_CASE_ID}/planning/report/pdf?audience=technical")
+    assert resp.status_code == 200
+    pdf_bytes = resp.content
+    assert pdf_bytes.startswith(b"%PDF-")
+    assert b"%%EOF" in pdf_bytes
+    assert pdf_bytes.count(b"/Subtype /Image") == 3
+    # Meaningfully larger than the pre-Day-26 text-only baseline (~9-10 KB)
+    assert len(pdf_bytes) > 50_000
+
+
+def test_real_case_pdf_contains_three_embedded_images_general(client):
+    """Real golden case: general-audience PDF also embeds exactly 3 CT slice images."""
+    resp = client.get(f"/api/cases/{REAL_CASE_ID}/planning/report/pdf?audience=general")
+    assert resp.status_code == 200
+    pdf_bytes = resp.content
+    assert pdf_bytes.startswith(b"%PDF-")
+    assert b"%%EOF" in pdf_bytes
+    assert pdf_bytes.count(b"/Subtype /Image") == 3
+    assert len(pdf_bytes) > 50_000
+
+
+def test_real_case_json_report_schema_unchanged(client):
+    """
+    Day 26 must not change the JSON report schema. Verify the top-level
+    PreoperativeReport field set is exactly the pre-existing 15 sections, and
+    the real case's JSON response is unaffected by the new PDF-only imagery.
+    """
+    expected_fields = {
+        "metadata", "case_overview", "imaging_info", "computational_findings",
+        "anatomical_structures", "spatial_relationships", "lesion_measurements",
+        "planning_targets", "planning_measurements", "planning_session_notes",
+        "procedural_context", "clinical_review_items", "system_limitations",
+        "provenance", "governance",
+    }
+    assert set(PreoperativeReport.model_fields.keys()) == expected_fields
+
+    resp = client.get(f"/api/cases/{REAL_CASE_ID}/planning/report?audience=technical")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert set(data.keys()) == expected_fields
+    finding = next(f for f in data["computational_findings"] if "cyst" in f["finding_id"])
+    assert finding["centroid_voxel"] == [110, 89, 218]
+
+
+def test_real_case_explanation_endpoint_unaffected(client):
+    """Day 26 touches only the PDF builder — /planning/explanation must be unaffected."""
+    resp = client.get(f"/api/cases/{REAL_CASE_ID}/planning/explanation?audience=technical")
+    assert resp.status_code == 200

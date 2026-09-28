@@ -393,6 +393,26 @@ class PreoperativeReportService:
 # ReportLab PDF Document Builder
 # ==============================================================================
 
+def _resolve_report_center_voxel(report: PreoperativeReport) -> tuple[list[int] | None, str]:
+    """
+    Deterministic fallback chain for the Day 26 imaging reference views:
+    primary computational finding centroid -> first planning target ->
+    CT volume center. Never invents a voxel coordinate; if no data is
+    available at all, returns None with an explanatory message.
+    """
+    if report.computational_findings and report.computational_findings[0].centroid_voxel:
+        f0 = report.computational_findings[0]
+        return f0.centroid_voxel, f"Centered on model-predicted finding '{f0.finding_id}'"
+    if report.planning_targets and report.planning_targets[0].voxel_coordinate:
+        t0 = report.planning_targets[0]
+        return t0.voxel_coordinate, f"Centered on planning target '{t0.target_id}'"
+    dims = report.imaging_info.dimensions
+    if dims:
+        center = [dims[0] // 2, dims[1] // 2, dims[2] // 2]
+        return center, "Centered on CT volume center (no computational finding or planning target available)"
+    return None, "CT volume dimensions unavailable — preoperative imagery cannot be generated for this case."
+
+
 def build_pdf_document(report: PreoperativeReport) -> bytes:
     """
     Builds an A4 portrait PDF using ReportLab Platypus.
@@ -677,8 +697,95 @@ def build_pdf_document(report: PreoperativeReport) -> bytes:
 
     story.append(Spacer(1, 6))
 
+    # ── SECTION 3 (Day 26): PREOPERATIVE IMAGING REFERENCE VIEWS ─────────────
+    # Reuses the existing, already-tested MPR slice-rendering path (the same
+    # one the live MPR viewer calls) — no CT/windowing/overlay/image-processing
+    # logic is duplicated here.
+    story.append(Paragraph("3. Preoperative Imaging Reference Views [DERIVED COMPUTATION]", section_heading))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cbd5e1"), spaceAfter=4))
+
+    from reportlab.platypus import Image as RLImage
+    from src.visualization.mpr import mpr_manager
+
+    IMAGING_WW, IMAGING_WL = 400.0, 40.0
+
+    center_voxel, center_source = _resolve_report_center_voxel(report)
+
+    if center_voxel is None:
+        story.append(Paragraph(f"<i>{center_source}</i>", body_style))
+    else:
+        story.append(
+            Paragraph(
+                f"<i>{center_source} — Voxel [{center_voxel[0]}, {center_voxel[1]}, {center_voxel[2]}]. "
+                f"Window: Soft Tissue (WW {int(IMAGING_WW)} / WL {int(IMAGING_WL)}). "
+                f"Computational visualization only — not a diagnostic annotation.</i>",
+                meta_style,
+            )
+        )
+        story.append(Spacer(1, 3))
+
+        # (plane key, display label, index axis into [x, y, z], pixel dims (w, h))
+        dims = img.dimensions
+        plane_specs = [
+            ("axial", "Axial", 2, (dims[0], dims[1]) if dims else None),
+            ("coronal", "Coronal", 1, (dims[0], dims[2]) if dims else None),
+            ("sagittal", "Sagittal", 0, (dims[1], dims[2]) if dims else None),
+        ]
+
+        MAX_DIM_PT = 150.0
+        image_cells = []
+        caption_cells = []
+        for plane_key, plane_label, axis_idx, pixel_dims in plane_specs:
+            slice_index = int(center_voxel[axis_idx])
+            try:
+                png_bytes = mpr_manager.get_slice_bytes(
+                    report.metadata.case_id,
+                    plane_key,
+                    slice_index,
+                    window_width=IMAGING_WW,
+                    window_level=IMAGING_WL,
+                    overlay_lesion=True,
+                )
+                if pixel_dims and pixel_dims[0] > 0 and pixel_dims[1] > 0:
+                    scale = MAX_DIM_PT / max(pixel_dims)
+                    draw_w, draw_h = pixel_dims[0] * scale, pixel_dims[1] * scale
+                else:
+                    draw_w, draw_h = MAX_DIM_PT, MAX_DIM_PT
+                image_cells.append(RLImage(io.BytesIO(png_bytes), width=draw_w, height=draw_h))
+                caption_cells.append(
+                    Paragraph(
+                        f"<b>{plane_label}</b> — Slice {slice_index} — WW {int(IMAGING_WW)}/WL {int(IMAGING_WL)} "
+                        f"— computational visualization only",
+                        meta_style,
+                    )
+                )
+            except Exception as e:
+                # Do not fabricate imagery — report the limitation instead,
+                # matching the report's existing graceful-degradation pattern
+                # (e.g. "No computational findings detected for this case.").
+                image_cells.append(Paragraph(f"<i>{plane_label} imagery unavailable.</i>", body_style))
+                caption_cells.append(
+                    Paragraph(f"<b>{plane_label}</b> — Not generated: {str(e)}", meta_style)
+                )
+
+        img_table = Table([image_cells, caption_cells], colWidths=[163, 163, 163])
+        img_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f8fafc")),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("PADDING", (0, 0), (-1, -1), 4),
+                ]
+            )
+        )
+        story.append(img_table)
+
+    story.append(Spacer(1, 6))
+
     # ── SECTION 4: SPATIAL RELATIONSHIPS ─────────────────────────────────────
-    story.append(Paragraph("3. Spatial Relationships & Proximities [DERIVED COMPUTATION]", section_heading))
+    story.append(Paragraph("4. Spatial Relationships & Proximities [DERIVED COMPUTATION]", section_heading))
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cbd5e1"), spaceAfter=4))
     story.append(
         Paragraph(
@@ -729,7 +836,7 @@ def build_pdf_document(report: PreoperativeReport) -> bytes:
     story.append(Spacer(1, 6))
 
     # ── SECTION 5: ANATOMICAL STRUCTURE AUDIT ─────────────────────────────────
-    story.append(Paragraph("4. Anatomical Structure Availability Registry [DERIVED COMPUTATION]", section_heading))
+    story.append(Paragraph("5. Anatomical Structure Availability Registry [DERIVED COMPUTATION]", section_heading))
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cbd5e1"), spaceAfter=4))
 
     avail_structs = [a for a in report.anatomical_structures if a.available]
@@ -778,7 +885,7 @@ def build_pdf_document(report: PreoperativeReport) -> bytes:
     story.append(Spacer(1, 6))
 
     # ── SECTION 6: PLANNING TARGETS & MEASUREMENTS ────────────────────────────
-    story.append(Paragraph("5. Surgical Planning Targets & Measurements [USER & MODEL ANNOTATIONS]", section_heading))
+    story.append(Paragraph("6. Surgical Planning Targets & Measurements [USER & MODEL ANNOTATIONS]", section_heading))
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cbd5e1"), spaceAfter=4))
 
     targets_text = []
@@ -820,7 +927,7 @@ def build_pdf_document(report: PreoperativeReport) -> bytes:
     story.append(Spacer(1, 6))
 
     # ── SECTION 7: PLANNING SESSION NOTES ─────────────────────────────────────
-    story.append(Paragraph("6. User Planning Session Notes [USER ANNOTATION]", section_heading))
+    story.append(Paragraph("7. User Planning Session Notes [USER ANNOTATION]", section_heading))
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cbd5e1"), spaceAfter=4))
 
     notes_str = (report.planning_session_notes.content or "").strip()
@@ -837,7 +944,7 @@ def build_pdf_document(report: PreoperativeReport) -> bytes:
     story.append(Spacer(1, 6))
 
     # ── SECTION 8: MANDATORY CLINICAL REVIEW ITEMS ────────────────────────────
-    story.append(Paragraph("7. Mandatory Clinical Review Items [CLINICAL BOUNDARIES]", section_heading))
+    story.append(Paragraph("8. Mandatory Clinical Review Items [CLINICAL BOUNDARIES]", section_heading))
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cbd5e1"), spaceAfter=4))
     story.append(
         Paragraph(
@@ -873,7 +980,7 @@ def build_pdf_document(report: PreoperativeReport) -> bytes:
     story.append(Spacer(1, 6))
 
     # ── SECTION 9: TECHNICAL LIMITATIONS & PROVENANCE ─────────────────────────
-    story.append(Paragraph("8. Technical Limitations & Pipeline Provenance [AUDIT TRAIL]", section_heading))
+    story.append(Paragraph("9. Technical Limitations & Pipeline Provenance [AUDIT TRAIL]", section_heading))
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cbd5e1"), spaceAfter=4))
 
     lim_items = [f"• <b>[{lim.domain.upper()}]</b> {lim.description}" for lim in report.system_limitations]

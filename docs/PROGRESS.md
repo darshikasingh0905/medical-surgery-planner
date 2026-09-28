@@ -1,9 +1,9 @@
 # Project Progress Report: AI-Assisted Preoperative Planning System
 
-**Document Version:** 1.12  
-**Last Updated:** September 2026 (Day 25 Completed)  
+**Document Version:** 1.13  
+**Last Updated:** September 2026 (Day 26 Completed)  
 **Target Repository:** `medical-surgery-planner`  
-**Current Status:** Preoperative Planning Workspace Active | Full-Stack Workstation Dashboard | Synchronized 3D + MPR Viewport | Interactive Preoperative Report (click-to-focus) | Workspace Organ/Lesion Opacity & Lesion Visibility Controls | Advanced Planning Measurements (Target↔Target, Target↔Structure, Structure↔Structure) | Planning Annotation Editing & Lesion→Annotation Integration | Complete MPR + Visualization Session Persistence | Coordinate System Audit Hardened | Deterministic Procedure Explanation Engine | Preoperative Report & PDF Export Layer | Vite Build Clean (0 errors)
+**Current Status:** Preoperative Planning Workspace Active | Full-Stack Workstation Dashboard | Synchronized 3D + MPR Viewport | Preoperative Report PDF with Embedded CT Slice Imagery | Interactive Preoperative Report (click-to-focus) | Workspace Organ/Lesion Opacity & Lesion Visibility Controls | Advanced Planning Measurements (Target↔Target, Target↔Structure, Structure↔Structure) | Planning Annotation Editing & Lesion→Annotation Integration | Complete MPR + Visualization Session Persistence | Coordinate System Audit Hardened | Deterministic Procedure Explanation Engine | Vite Build Clean (0 errors)
 
 
 ---
@@ -37,12 +37,13 @@ The system emphasizes **clinical safety, deterministic reproducibility, and stri
 | **Lesion REST API Endpoints** | **Completed** | FastAPI | `GET /lesions`, `GET /lesions/{id}` with cached + dynamic metrics |
 | **Multi-Planar Reconstruction (MPR)** | **Completed** | NumPy, Pillow, FastAPI | Sub-millisecond Axial/Coronal/Sagittal streaming, HU windowing, synchronized crosshairs |
 | **Planning Markers & Annotation Layer**| **Completed** | FastAPI, React, Three.js | Unified target model, atomic JSON persistence, 2D/3D synchronized markers, click-to-annotate UX |
-| **Automated Verification Suite** | **Active (100% Pass)** | `pytest` (268 tests) | 268 passed, 0 skipped, 0 failed |
+| **Automated Verification Suite** | **Active (100% Pass)** | `pytest` (279 tests) | 279 passed, 0 skipped, 0 failed |
 | **Preoperative Report & PDF Export** | **Completed** | Pydantic, ReportLab, React | 15-section JSON report + A4 PDF, technical/general audiences |
 | **Advanced Planning Measurements** | **Completed** | FastAPI, React | Target↔Target, Target↔Structure, Structure↔Structure UI |
 | **Planning Annotation Editing & Lesion→Annotation** | **Completed** | FastAPI, React | Edit label/notes on user annotations; create annotation from a model finding |
 | **Interactive Preoperative Report** | **Completed** | React | Click-to-focus on findings/anatomy/relationships/targets/measurements |
 | **Workspace Visualization Controls** | **Completed** | React, FastAPI | Organ/lesion opacity sliders, per-lesion visibility toggle, session-persisted |
+| **Preoperative Report Imaging** | **Completed** | ReportLab, `mpr_manager` | 3 embedded CT slice views (axial/coronal/sagittal) in the PDF report |
 
 ---
 
@@ -532,28 +533,61 @@ python -m pytest tests/ -v
 
 ---
 
-## 16. Active Blockers & Next Steps
+## 16. Day 26 Milestone: Preoperative Report Imaging (Embedded CT Slice Views)
+
+- **Architecture**: `build_pdf_document()` in `src/planning/report_service.py`
+  gained a new "Preoperative Imaging Reference Views" section that embeds
+  three ReportLab `Image` flowables (axial, coronal, sagittal), each rendered
+  by calling the existing, already-tested `mpr_manager.get_slice_bytes()` —
+  the exact same function the live MPR viewer calls. No CT/windowing/overlay
+  image-processing logic was duplicated or reimplemented.
+- **Deterministic centering**: a new module-level helper,
+  `_resolve_report_center_voxel()`, resolves the center voxel via a fixed
+  fallback chain — primary computational finding centroid → first planning
+  target → CT volume center — and never fabricates a voxel; if no imaging
+  dimensions are available at all, it returns `None` with an explanatory
+  message instead of a placeholder image.
+- **Fixed parameters**: soft-tissue window (WW 400 / WL 40) and
+  `overlay_lesion=True`, matching the system's standard default preset. Each
+  image's caption states plane, slice index, window preset, and
+  "computational visualization only."
+- **Graceful degradation**: if slice generation fails for any plane, that
+  plane falls back to an explanatory text note (matching the report's
+  existing "No computational findings detected" — style pattern) rather than
+  crashing the whole PDF or inventing imagery.
+- **Zero schema/API/frontend impact**: `generate_report()`, `report_models.py`,
+  both REST endpoints, and all frontend code are unchanged — verified by a
+  new test asserting the JSON `PreoperativeReport` field set is unchanged.
+- **No new dependency**: image-embedding verification in tests uses a raw
+  `/Subtype /Image` byte-marker count rather than a PDF-parsing library —
+  `pypdf` was considered but judged unnecessary and not added.
+- **Quality Assurance**: see `docs/DAY26.md` for exact test counts, real-case
+  validation, and governance audit results.
+- **Documentation**: [`docs/DAY26.md`](DAY26.md) — full milestone report.
+
+---
+
+## 17. Active Blockers & Next Steps
 
 ### Active Blockers:
 * **None**
 
 ### Future Directions:
-1. Embed MPR slice captures directly into the PDF report (currently tabular/text only)
-2. Multi-point surgical polyline / resection boundary estimation and curved-planar reformation (CPR)
-3. Specialized vascular sub-segmentation integration (e.g. TotalSegmentator tissue/vessel models)
-4. Frontend automated test harness (none currently exists — Days 23–25's frontend
+1. Multi-point surgical polyline / resection boundary estimation and curved-planar reformation (CPR)
+2. Specialized vascular sub-segmentation integration (e.g. TotalSegmentator tissue/vessel models)
+3. Frontend automated test harness (none currently exists — Days 23–26's frontend
    changes were validated via manual build + backend API-level regression tests)
-5. Backend-level duplicate-annotation guard for `create_annotation_from_lesion`
+4. Backend-level duplicate-annotation guard for `create_annotation_from_lesion`
    (currently a frontend-only UX guard — see `docs/DAY24.md` limitations)
-6. Workspace target-visibility toggle + `visible_targets` session persistence
+5. Workspace target-visibility toggle + `visible_targets` session persistence
    (no corresponding UI control exists yet — see `docs/DAY25.md` limitations)
-7. Reduce duplicated select/focus/opacity logic between `App.jsx` (Standard
+6. Reduce duplicated select/focus/opacity logic between `App.jsx` (Standard
    View) and `PlanningWorkspace.jsx` (Workspace View) — a pre-existing
    architectural note, growing slightly with each added control
 
 ---
 
-## 17. Medical Safety & Clinical Governance
+## 18. Medical Safety & Clinical Governance
 
 * **Investigational Use Only**: This software is an engineering prototype designed for research and educational preoperative planning. It is not FDA/CE cleared as a primary diagnostic device.
 * **Human-in-the-Loop Review**: All segmentations, 3D meshes, and quantitative measurements must be verified by a board-certified radiologist or surgical specialist before any operative procedure.
