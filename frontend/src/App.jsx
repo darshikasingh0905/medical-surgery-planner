@@ -302,6 +302,23 @@ function App() {
     [startPolling]
   );
 
+  // ── Resume an existing case from case history (Day 27) ─────────────────────
+  // Reuses the exact same startPolling() path the upload success branch
+  // already uses — no second case-loading/polling implementation. The first
+  // poll() tick immediately fetches the case's real current status (and
+  // already handles 'completed' and 'failed' correctly), so no separate
+  // status pre-fetch is needed here.
+  const handleResumeCase = useCallback(
+    (resumeCaseId) => {
+      if (!resumeCaseId) return;
+      setUploadError(null);
+      setCaseId(resumeCaseId);
+      setAppState('processing');
+      startPolling(resumeCaseId);
+    },
+    [startPolling]
+  );
+
   // ── Reset to initial state ─────────────────────────────────────────────────
   const handleReset = useCallback(() => {
     stopPolling();
@@ -717,6 +734,7 @@ function App() {
             onUpload={handleUpload}
             isUploading={isUploading}
             uploadError={uploadError}
+            onResumeCase={handleResumeCase}
           />
         </main>
       )}

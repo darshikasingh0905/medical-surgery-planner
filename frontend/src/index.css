@@ -190,8 +190,10 @@ body {
 .upload-screen {
   width: 100%;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 1.25rem;
   padding: 1rem;
 }
 
@@ -5037,6 +5039,156 @@ body {
 
 .report-row-interactive:focus-visible {
   box-shadow: inset 0 0 0 2px rgba(56, 189, 248, 0.5);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Day 27: Case History / Resume Previous Case
+   ══════════════════════════════════════════════════════════════════ */
+
+.case-history-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.5rem;
+  width: 100%;
+  max-width: 520px;
+  box-shadow: var(--shadow-lg);
+}
+
+.case-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+}
+
+.case-history-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  margin: 0;
+}
+
+.case-history-count {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #64748b;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.1rem 0.45rem;
+  border-radius: 10px;
+}
+
+.case-history-state {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  padding: 0.5rem 0.1rem;
+}
+
+.case-history-state--error {
+  color: #f87171;
+}
+
+.case-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.case-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 0.5rem 0.65rem;
+}
+
+.case-history-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.case-history-filename {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.case-history-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.case-status-badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 0.08rem 0.4rem;
+  border-radius: 3px;
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+}
+
+.case-status-badge--completed {
+  background: rgba(52, 211, 153, 0.15);
+  color: #34d399;
+}
+
+.case-status-badge--processing,
+.case-status-badge--uploaded {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+.case-status-badge--failed {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+
+.case-history-date {
+  font-size: 0.66rem;
+  color: #64748b;
+}
+
+.btn-resume-case {
+  flex-shrink: 0;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.3rem 0.65rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-resume-case:hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.24);
+}
+
+.btn-resume-case:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 

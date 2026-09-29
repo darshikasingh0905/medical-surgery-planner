@@ -79,6 +79,17 @@ export async function getCaseStatus(caseId) {
 }
 
 /**
+ * Retrieve the read-only case history listing (Day 27) — every case found on
+ * disk, most recently modified first. Used to let a user discover and resume
+ * a previously processed case without already knowing its case_id.
+ *
+ * @returns {Promise<{ cases: Array<{ case_id: string, filename: string|null, status: string, last_modified: string }> }>}
+ */
+export async function getCaseList() {
+  return apiFetch('/cases');
+}
+
+/**
  * Retrieve structured measurement results for a completed case.
  * Only valid when status === 'completed'.
  *

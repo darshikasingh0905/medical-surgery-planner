@@ -2,6 +2,7 @@ import os
 import uuid
 import shutil
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Assuming outputs directory is at the root of the project
@@ -90,3 +91,60 @@ def update_case_status(case_id: str, status: str, error: str = None, results: di
     case_json_path = get_case_path(case_id) / "case.json"
     with open(case_json_path, "w") as f:
         json.dump(case_info, f, indent=4)
+
+
+def _get_case_last_modified(case_id: str) -> float:
+    """
+    Returns the most meaningful available last-modified epoch timestamp for a
+    case: case.json's own mtime (rewritten whenever status changes) if it
+    exists, otherwise the case directory's own mtime as a fallback.
+    """
+    case_json_path = get_case_path(case_id) / "case.json"
+    try:
+        if case_json_path.is_file():
+            return case_json_path.stat().st_mtime
+        return get_case_path(case_id).stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def list_cases() -> list[dict]:
+    """
+    Read-only listing of every case directory under CASES_DIR, most recently
+    modified first.
+
+    Reuses get_case_info() for its existing filename/status fallback
+    semantics (including the missing-case.json fallback) rather than
+    duplicating that logic. Never creates, modifies, or deletes any case
+    file. A single malformed/unreadable case directory is skipped rather
+    than aborting the entire listing.
+    """
+    if not CASES_DIR.is_dir():
+        return []
+
+    cases: list[dict] = []
+    for entry in CASES_DIR.iterdir():
+        if not entry.is_dir():
+            continue
+        case_id = entry.name
+        try:
+            info = get_case_info(case_id) or {}
+            last_modified_ts = _get_case_last_modified(case_id)
+            cases.append({
+                "case_id": case_id,
+                "filename": info.get("filename"),
+                "status": info.get("status") or "unknown",
+                "last_modified": datetime.fromtimestamp(
+                    last_modified_ts, tz=timezone.utc
+                ).isoformat(),
+                "_sort_ts": last_modified_ts,
+            })
+        except Exception:
+            # Do not let one malformed/unreadable case directory break the
+            # entire listing.
+            continue
+
+    cases.sort(key=lambda c: c["_sort_ts"], reverse=True)
+    for c in cases:
+        del c["_sort_ts"]
+    return cases

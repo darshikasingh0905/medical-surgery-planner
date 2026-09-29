@@ -1,4 +1,16 @@
 import React, { useRef } from 'react';
+import { getCaseList } from './api';
+
+/**
+ * Formats an ISO 8601 timestamp for display; falls back to the raw string
+ * if parsing fails rather than showing nothing.
+ */
+function formatLastModified(iso) {
+  if (!iso) return 'Unknown date';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString();
+}
 
 /**
  * UploadPanel — CT scan file selection and upload UI.
@@ -9,11 +21,44 @@ import React, { useRef } from 'react';
  * Accepts only .nii and .nii.gz files.
  * Does NOT perform the actual upload — that is App's responsibility.
  *
+ * Day 27: also surfaces a read-only "Resume a Previous Case" list, fetched
+ * from the existing case-history endpoint. Selecting a case calls
+ * onResumeCase(caseId), which App.jsx wires to the existing startPolling()
+ * path already used by a successful upload — no second case-loading
+ * mechanism is introduced here.
+ *
  * ⚠️ Medical Safety Disclaimer is always visible.
  */
-const UploadPanel = ({ onUpload, isUploading, uploadError }) => {
+const UploadPanel = ({ onUpload, isUploading, uploadError, onResumeCase }) => {
   const fileInputRef = useRef(null);
   const [selectedFile, setSelectedFile] = React.useState(null);
+
+  // ── Case History (Day 27) ────────────────────────────────────────────────
+  const [caseList, setCaseList] = React.useState([]);
+  const [loadingCases, setLoadingCases] = React.useState(true);
+  const [casesError, setCasesError] = React.useState(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function loadCases() {
+      setLoadingCases(true);
+      setCasesError(null);
+      try {
+        const data = await getCaseList();
+        if (!cancelled) setCaseList(data.cases || []);
+      } catch (err) {
+        if (!cancelled) setCasesError(err.message || 'Failed to load case history.');
+      } finally {
+        if (!cancelled) setLoadingCases(false);
+      }
+    }
+
+    loadCases();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -151,6 +196,65 @@ const UploadPanel = ({ onUpload, isUploading, uploadError }) => {
             This system does not provide autonomous diagnosis or autonomous surgical planning.
           </span>
         </div>
+      </div>
+
+      {/* Case History / Resume (Day 27) */}
+      <div className="case-history-card" id="case-history-card">
+        <div className="case-history-header">
+          <h3 className="case-history-title">📂 Resume a Previous Case</h3>
+          {!loadingCases && !casesError && (
+            <span className="case-history-count">{caseList.length}</span>
+          )}
+        </div>
+
+        {loadingCases && (
+          <div className="case-history-state" id="case-history-loading">
+            <span className="btn-spinner" aria-hidden="true" />
+            Loading case history…
+          </div>
+        )}
+
+        {!loadingCases && casesError && (
+          <div className="case-history-state case-history-state--error" role="alert" id="case-history-error">
+            Could not load case history: {casesError}
+          </div>
+        )}
+
+        {!loadingCases && !casesError && caseList.length === 0 && (
+          <div className="case-history-state" id="case-history-empty">
+            No previous cases found on this server.
+          </div>
+        )}
+
+        {!loadingCases && !casesError && caseList.length > 0 && (
+          <ul className="case-history-list" aria-label="Previous cases">
+            {caseList.map((c) => (
+              <li key={c.case_id} className="case-history-item" id={`case-history-item-${c.case_id}`}>
+                <div className="case-history-item-info">
+                  <span className="case-history-filename" title={c.filename || 'Unknown filename'}>
+                    {c.filename || 'Unknown filename'}
+                  </span>
+                  <span className="case-history-meta">
+                    <span className={`case-status-badge case-status-badge--${c.status}`}>
+                      {c.status}
+                    </span>
+                    <span className="case-history-date">{formatLastModified(c.last_modified)}</span>
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="btn-resume-case"
+                  onClick={() => onResumeCase && onResumeCase(c.case_id)}
+                  disabled={!onResumeCase}
+                  id={`btn-resume-${c.case_id}`}
+                  title={`Resume case ${c.case_id}`}
+                >
+                  Resume
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );

@@ -252,3 +252,162 @@ def test_get_case_lesions_with_cached_results(tmp_path, monkeypatch):
     assert res_404.status_code == 404
     assert "not found" in res_404.json()["detail"]
 
+
+# =====================================================================
+# Day 27: Case History / Resume Previous Case (GET /api/cases)
+# =====================================================================
+
+def test_list_cases_empty(tmp_path, monkeypatch):
+    """An empty (or nonexistent) CASES_DIR yields an empty list, not an error."""
+    import src.api.utils.case_manager
+    monkeypatch.setattr(src.api.utils.case_manager, "CASES_DIR", tmp_path / "cases")
+
+    response = client.get("/api/cases")
+    assert response.status_code == 200
+    assert response.json() == {"cases": []}
+
+
+def test_list_cases_multiple_and_sorting(tmp_path, monkeypatch):
+    """
+    Covers: multiple valid cases, a completed case, a failed case, and
+    deterministic most-recently-modified-first sorting.
+    """
+    import os
+    import time
+    import src.api.utils.case_manager
+    cases_dir = tmp_path / "cases"
+    monkeypatch.setattr(src.api.utils.case_manager, "CASES_DIR", cases_dir)
+
+    # Case A: completed, older
+    init_case_directory("case-a", "scan_a.nii")
+    case_a_json = cases_dir / "case-a" / "case.json"
+    with open(case_a_json, "w") as f:
+        json.dump({"case_id": "case-a", "filename": "scan_a.nii", "status": "completed"}, f)
+    old_time = time.time() - 3600
+    os.utime(case_a_json, (old_time, old_time))
+
+    # Case B: failed, newer
+    init_case_directory("case-b", "scan_b.nii")
+    case_b_json = cases_dir / "case-b" / "case.json"
+    with open(case_b_json, "w") as f:
+        json.dump({"case_id": "case-b", "filename": "scan_b.nii", "status": "failed", "error": "boom"}, f)
+    new_time = time.time()
+    os.utime(case_b_json, (new_time, new_time))
+
+    response = client.get("/api/cases")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["cases"]) == 2
+
+    # Most recently modified first
+    assert data["cases"][0]["case_id"] == "case-b"
+    assert data["cases"][0]["status"] == "failed"
+    assert data["cases"][1]["case_id"] == "case-a"
+    assert data["cases"][1]["status"] == "completed"
+    for c in data["cases"]:
+        assert c["last_modified"], "last_modified must be present and non-empty"
+
+
+def test_list_cases_missing_case_json_fallback(tmp_path, monkeypatch):
+    """
+    A case directory with no case.json at all must still be listed, using the
+    same input/-scan fallback semantics get_case_info() already implements —
+    not a separate, duplicated fallback.
+    """
+    import src.api.utils.case_manager
+    cases_dir = tmp_path / "cases"
+    monkeypatch.setattr(src.api.utils.case_manager, "CASES_DIR", cases_dir)
+
+    case_dir = cases_dir / "orphan-case"
+    (case_dir / "input").mkdir(parents=True)
+    (case_dir / "input" / "orphan_scan.nii").write_bytes(b"fake")
+
+    response = client.get("/api/cases")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["cases"]) == 1
+    entry = data["cases"][0]
+    assert entry["case_id"] == "orphan-case"
+    assert entry["filename"] == "orphan_scan.nii"
+    assert entry["status"] == "uploaded"
+
+
+def test_list_cases_malformed_case_json_is_skipped_not_fatal(tmp_path, monkeypatch):
+    """
+    A malformed/unreadable case.json must not abort the entire listing — that
+    one case is skipped and every other valid case is still returned.
+    """
+    import src.api.utils.case_manager
+    cases_dir = tmp_path / "cases"
+    monkeypatch.setattr(src.api.utils.case_manager, "CASES_DIR", cases_dir)
+
+    init_case_directory("good-case", "good.nii")
+
+    bad_dir = cases_dir / "bad-case"
+    bad_dir.mkdir(parents=True)
+    (bad_dir / "case.json").write_text("{ this is not valid json ")
+
+    response = client.get("/api/cases")
+    assert response.status_code == 200
+    data = response.json()
+    case_ids = {c["case_id"] for c in data["cases"]}
+    assert "good-case" in case_ids
+    assert "bad-case" not in case_ids
+
+
+def test_list_cases_is_read_only(tmp_path, monkeypatch):
+    """Listing must never create, modify, or delete any case file."""
+    import src.api.utils.case_manager
+    cases_dir = tmp_path / "cases"
+    monkeypatch.setattr(src.api.utils.case_manager, "CASES_DIR", cases_dir)
+
+    init_case_directory("ro-case", "ro.nii")
+    case_json = cases_dir / "ro-case" / "case.json"
+    before_content = case_json.read_bytes()
+    before_mtime = case_json.stat().st_mtime
+
+    response = client.get("/api/cases")
+    assert response.status_code == 200
+
+    after_content = case_json.read_bytes()
+    after_mtime = case_json.stat().st_mtime
+    assert before_content == after_content
+    assert before_mtime == after_mtime
+
+
+def test_list_cases_response_shape(tmp_path, monkeypatch):
+    """GET /api/cases response envelope matches the documented contract exactly."""
+    import src.api.utils.case_manager
+    cases_dir = tmp_path / "cases"
+    monkeypatch.setattr(src.api.utils.case_manager, "CASES_DIR", cases_dir)
+
+    init_case_directory("shape-case", "shape.nii")
+
+    response = client.get("/api/cases")
+    assert response.status_code == 200
+    data = response.json()
+    assert set(data.keys()) == {"cases"}
+    assert isinstance(data["cases"], list)
+    entry = data["cases"][0]
+    assert set(entry.keys()) == {"case_id", "filename", "status", "last_modified"}
+
+
+def test_real_case_appears_in_case_list():
+    """
+    Non-destructive: confirms the real golden case is discoverable via the
+    new case-history endpoint without mutating it.
+    """
+    real_case_id = "b2f89382-9416-4e94-9486-b00c6b1de64b"
+    from pathlib import Path
+    if not (Path("outputs/cases") / real_case_id).is_dir():
+        pytest.skip(f"Real case {real_case_id} not found on disk")
+
+    response = client.get("/api/cases")
+    assert response.status_code == 200
+    data = response.json()
+    entry = next((c for c in data["cases"] if c["case_id"] == real_case_id), None)
+    assert entry is not None, "Golden case must appear in the case history listing"
+    assert entry["status"] == "completed"
+    assert entry["filename"] == "ct_15mm_defaced.nii"
+    assert entry["last_modified"]
+

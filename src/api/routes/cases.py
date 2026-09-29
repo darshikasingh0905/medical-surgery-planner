@@ -5,7 +5,7 @@ import shutil
 import os
 import json
 
-from src.api.utils.case_manager import generate_case_id, init_case_directory, get_case_info, get_case_path, case_exists
+from src.api.utils.case_manager import generate_case_id, init_case_directory, get_case_info, get_case_path, case_exists, list_cases
 from src.pipeline.case_processor import process_case_background
 
 router = APIRouter(prefix="/api/cases", tags=["cases"])
@@ -16,6 +16,17 @@ class CaseResponse(BaseModel):
     status: str
     error: str | None = None
     results: dict | None = None
+
+class CaseSummary(BaseModel):
+    """Lightweight per-case entry for the read-only case history listing (Day 27)."""
+    case_id: str
+    filename: str | None = None
+    status: str
+    last_modified: str
+
+class CaseListResponse(BaseModel):
+    """Response envelope for GET /api/cases."""
+    cases: list[CaseSummary]
 
 ALLOWED_EXTENSIONS = {".nii", ".nii.gz"}
 
@@ -68,11 +79,29 @@ async def get_case_status(case_id: str):
     Retrieve information about an existing case including processing status.
     """
     case_info = get_case_info(case_id)
-    
+
     if not case_info:
         raise HTTPException(status_code=404, detail="Case not found")
-        
+
     return CaseResponse(**case_info)
+
+
+@router.get("", response_model=CaseListResponse)
+async def get_case_list():
+    """
+    Read-only case history listing (Day 27).
+
+    Returns every case found on disk, most recently modified first, so a
+    user can discover and resume a previously processed case without
+    already knowing its case_id. Never creates, modifies, or deletes any
+    case data; a malformed/unreadable case directory is skipped rather than
+    failing the whole request.
+    """
+    try:
+        cases = list_cases()
+        return CaseListResponse(cases=[CaseSummary(**c) for c in cases])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing cases: {str(e)}")
 
 @router.get("/{case_id}/results")
 async def get_case_results(case_id: str):
