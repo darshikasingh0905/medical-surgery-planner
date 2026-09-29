@@ -5,7 +5,7 @@ import shutil
 import os
 import json
 
-from src.api.utils.case_manager import generate_case_id, init_case_directory, get_case_info, get_case_path, case_exists, list_cases
+from src.api.utils.case_manager import generate_case_id, init_case_directory, get_case_info, get_case_path, case_exists, list_cases, delete_case
 from src.pipeline.case_processor import process_case_background
 
 router = APIRouter(prefix="/api/cases", tags=["cases"])
@@ -102,6 +102,29 @@ async def get_case_list():
         return CaseListResponse(cases=[CaseSummary(**c) for c in cases])
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listing cases: {str(e)}")
+
+
+@router.delete("/{case_id}")
+async def delete_case_endpoint(case_id: str):
+    """
+    Permanently delete a case and all of its associated data — input scan,
+    segmentation, meshes, measurements, lesions, and planning session/
+    targets/annotations/measurements (Day 28).
+
+    Destructive and irreversible. The frontend must confirm with the user
+    before calling this endpoint; this route itself performs no
+    confirmation of its own. Only ever removes the single named case's own
+    directory — never any other case.
+    """
+    try:
+        deleted = delete_case(case_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+        return {"status": "deleted", "case_id": case_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting case: {str(e)}")
 
 @router.get("/{case_id}/results")
 async def get_case_results(case_id: str):

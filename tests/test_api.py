@@ -411,3 +411,143 @@ def test_real_case_appears_in_case_list():
     assert entry["filename"] == "ct_15mm_defaced.nii"
     assert entry["last_modified"]
 
+
+# =====================================================================
+# Day 28: Case Deletion (DELETE /api/cases/{case_id})
+#
+# SAFETY: every test in this section operates exclusively on a monkeypatched,
+# pytest-managed tmp_path CASES_DIR. None of these tests ever call DELETE
+# against the real outputs/cases/ directory or the golden case. The final
+# test in this section explicitly re-verifies the golden case is untouched.
+# =====================================================================
+
+def test_delete_case_success(tmp_path, monkeypatch):
+    """Deleting an existing case returns 200 and removes its directory entirely."""
+    import src.api.utils.case_manager
+    cases_dir = tmp_path / "cases"
+    monkeypatch.setattr(src.api.utils.case_manager, "CASES_DIR", cases_dir)
+
+    case_path = init_case_directory("delete-me", "delete_me.nii")
+    assert case_path.is_dir()
+
+    response = client.delete("/api/cases/delete-me")
+    assert response.status_code == 200
+    data = response.json()
+    assert data == {"status": "deleted", "case_id": "delete-me"}
+    assert not case_path.is_dir()
+
+
+def test_delete_case_not_found(tmp_path, monkeypatch):
+    """Deleting a case_id that does not exist returns 404, not an error."""
+    import src.api.utils.case_manager
+    monkeypatch.setattr(src.api.utils.case_manager, "CASES_DIR", tmp_path / "cases")
+
+    response = client.delete("/api/cases/does-not-exist")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+def test_delete_case_removes_all_associated_data(tmp_path, monkeypatch):
+    """
+    Deletion must remove the entire case tree — not just case.json — including
+    nested planning/segmentation/lesions data.
+    """
+    import src.api.utils.case_manager
+    cases_dir = tmp_path / "cases"
+    monkeypatch.setattr(src.api.utils.case_manager, "CASES_DIR", cases_dir)
+
+    case_path = init_case_directory("full-case", "full.nii")
+    # Simulate a fully-processed case with nested planning/lesions data
+    (case_path / "planning").mkdir(parents=True, exist_ok=True)
+    (case_path / "planning" / "measurements.json").write_text('{"measurements": []}')
+    (case_path / "planning" / "annotations.json").write_text('{"annotations": []}')
+    (case_path / "lesions").mkdir(parents=True, exist_ok=True)
+    (case_path / "lesions" / "cyst_left.nii.gz").write_bytes(b"fake mask bytes")
+    (case_path / "segmentation" / "kidney_left.nii.gz").write_bytes(b"fake seg bytes")
+
+    assert (case_path / "planning" / "measurements.json").is_file()
+    assert (case_path / "lesions" / "cyst_left.nii.gz").is_file()
+
+    response = client.delete("/api/cases/full-case")
+    assert response.status_code == 200
+    assert not case_path.exists(), "Entire case directory tree must be gone, not just case.json"
+
+
+def test_delete_case_does_not_affect_other_cases(tmp_path, monkeypatch):
+    """Deleting one case must never touch any other case's data."""
+    import src.api.utils.case_manager
+    cases_dir = tmp_path / "cases"
+    monkeypatch.setattr(src.api.utils.case_manager, "CASES_DIR", cases_dir)
+
+    init_case_directory("case-keep", "keep.nii")
+    init_case_directory("case-remove", "remove.nii")
+    keep_json = cases_dir / "case-keep" / "case.json"
+    before_content = keep_json.read_bytes()
+    before_mtime = keep_json.stat().st_mtime
+
+    response = client.delete("/api/cases/case-remove")
+    assert response.status_code == 200
+
+    assert (cases_dir / "case-keep").is_dir()
+    after_content = keep_json.read_bytes()
+    after_mtime = keep_json.stat().st_mtime
+    assert before_content == after_content
+    assert before_mtime == after_mtime
+
+    # Still correctly reported by the listing endpoint
+    listing = client.get("/api/cases").json()
+    remaining_ids = {c["case_id"] for c in listing["cases"]}
+    assert remaining_ids == {"case-keep"}
+
+
+def test_deleted_case_no_longer_appears_in_list(tmp_path, monkeypatch):
+    """After deletion, GET /api/cases must no longer include the deleted case."""
+    import src.api.utils.case_manager
+    cases_dir = tmp_path / "cases"
+    monkeypatch.setattr(src.api.utils.case_manager, "CASES_DIR", cases_dir)
+
+    init_case_directory("ephemeral-case", "ephemeral.nii")
+    before = client.get("/api/cases").json()
+    assert any(c["case_id"] == "ephemeral-case" for c in before["cases"])
+
+    client.delete("/api/cases/ephemeral-case")
+
+    after = client.get("/api/cases").json()
+    assert not any(c["case_id"] == "ephemeral-case" for c in after["cases"])
+
+
+def test_delete_case_double_delete_returns_404(tmp_path, monkeypatch):
+    """Deleting the same case twice: first succeeds, second is a clean 404."""
+    import src.api.utils.case_manager
+    cases_dir = tmp_path / "cases"
+    monkeypatch.setattr(src.api.utils.case_manager, "CASES_DIR", cases_dir)
+
+    init_case_directory("twice-case", "twice.nii")
+    first = client.delete("/api/cases/twice-case")
+    assert first.status_code == 200
+    second = client.delete("/api/cases/twice-case")
+    assert second.status_code == 404
+
+
+def test_golden_case_untouched_after_deletion_test_battery():
+    """
+    Regression safety net: after the entire Day 28 delete-test battery above
+    has run (all against monkeypatched tmp_path directories only), the real
+    golden case must still exist on disk, completely intact.
+    """
+    real_case_id = "b2f89382-9416-4e94-9486-b00c6b1de64b"
+    from pathlib import Path
+    if not (Path("outputs/cases") / real_case_id).is_dir():
+        pytest.skip(f"Real case {real_case_id} not found on disk")
+
+    response = client.get(f"/api/cases/{real_case_id}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["case_id"] == real_case_id
+    assert data["status"] == "completed"
+    assert data["filename"] == "ct_15mm_defaced.nii"
+
+    targets = client.get(f"/api/cases/{real_case_id}/planning/targets").json()
+    model_target = next(t for t in targets["targets"] if t["target_id"] == "model_cyst_left")
+    assert model_target["voxel_coordinate"] == [110, 89, 218]
+

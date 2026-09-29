@@ -148,3 +148,23 @@ def list_cases() -> list[dict]:
     for c in cases:
         del c["_sort_ts"]
     return cases
+
+
+def delete_case(case_id: str) -> bool:
+    """
+    Permanently deletes a case's entire directory (input scan, segmentation,
+    meshes, measurements, lesions, planning session/targets/annotations/
+    measurements — everything under outputs/cases/<case_id>/).
+
+    Destructive and irreversible; only ever touches the single named case's
+    own directory, never any other case. The caller (route layer) is
+    responsible for any user confirmation before invoking this.
+
+    Returns True if the case existed and was deleted, False if it did not
+    exist (the caller should treat that as "not found", not an error).
+    """
+    case_path = get_case_path(case_id)
+    if not case_path.is_dir():
+        return False
+    shutil.rmtree(case_path)
+    return True

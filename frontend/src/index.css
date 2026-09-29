@@ -5191,5 +5191,35 @@ body {
   cursor: not-allowed;
 }
 
+/* Day 28: Case Deletion */
+
+.case-history-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.btn-delete-case {
+  flex-shrink: 0;
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  color: #f87171;
+  font-size: 0.75rem;
+  line-height: 1;
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-delete-case:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.22);
+}
+
+.btn-delete-case:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 

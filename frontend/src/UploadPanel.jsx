@@ -2,6 +2,15 @@ import React, { useRef } from 'react';
 import { getCaseList } from './api';
 
 /**
+ * A short, human-readable label for a case in the delete-confirmation
+ * dialog — never invents or infers clinical metadata, just echoes the
+ * filename/case_id already shown in the list.
+ */
+function describeCaseForConfirm(caseSummary) {
+  return caseSummary.filename || caseSummary.case_id;
+}
+
+/**
  * Formats an ISO 8601 timestamp for display; falls back to the raw string
  * if parsing fails rather than showing nothing.
  */
@@ -27,9 +36,14 @@ function formatLastModified(iso) {
  * path already used by a successful upload — no second case-loading
  * mechanism is introduced here.
  *
+ * Day 28: each case in that list can also be permanently deleted via
+ * onDeleteCase(caseId), which App.jsx wires to the existing deleteCase()
+ * API helper. Deletion requires an explicit user confirmation dialog before
+ * the API call is made; the local list is optimistically updated on success.
+ *
  * ⚠️ Medical Safety Disclaimer is always visible.
  */
-const UploadPanel = ({ onUpload, isUploading, uploadError, onResumeCase }) => {
+const UploadPanel = ({ onUpload, isUploading, uploadError, onResumeCase, onDeleteCase }) => {
   const fileInputRef = useRef(null);
   const [selectedFile, setSelectedFile] = React.useState(null);
 
@@ -37,6 +51,10 @@ const UploadPanel = ({ onUpload, isUploading, uploadError, onResumeCase }) => {
   const [caseList, setCaseList] = React.useState([]);
   const [loadingCases, setLoadingCases] = React.useState(true);
   const [casesError, setCasesError] = React.useState(null);
+
+  // ── Case Deletion (Day 28) ───────────────────────────────────────────────
+  const [deletingCaseId, setDeletingCaseId] = React.useState(null);
+  const [deleteError, setDeleteError] = React.useState(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -59,6 +77,26 @@ const UploadPanel = ({ onUpload, isUploading, uploadError, onResumeCase }) => {
       cancelled = true;
     };
   }, []);
+
+  const handleDeleteCaseClick = async (caseSummary) => {
+    if (!onDeleteCase) return;
+    const confirmed = window.confirm(
+      `Permanently delete this case (${describeCaseForConfirm(caseSummary)})? ` +
+        'This removes all of its scan data, segmentation, and planning data. This cannot be undone.'
+    );
+    if (!confirmed) return;
+
+    setDeleteError(null);
+    setDeletingCaseId(caseSummary.case_id);
+    try {
+      await onDeleteCase(caseSummary.case_id);
+      setCaseList((prev) => prev.filter((c) => c.case_id !== caseSummary.case_id));
+    } catch (err) {
+      setDeleteError(err.message || 'Failed to delete case.');
+    } finally {
+      setDeletingCaseId(null);
+    }
+  };
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -226,6 +264,12 @@ const UploadPanel = ({ onUpload, isUploading, uploadError, onResumeCase }) => {
           </div>
         )}
 
+        {deleteError && (
+          <div className="case-history-state case-history-state--error" role="alert" id="case-history-delete-error">
+            Could not delete case: {deleteError}
+          </div>
+        )}
+
         {!loadingCases && !casesError && caseList.length > 0 && (
           <ul className="case-history-list" aria-label="Previous cases">
             {caseList.map((c) => (
@@ -241,16 +285,29 @@ const UploadPanel = ({ onUpload, isUploading, uploadError, onResumeCase }) => {
                     <span className="case-history-date">{formatLastModified(c.last_modified)}</span>
                   </span>
                 </div>
-                <button
-                  type="button"
-                  className="btn-resume-case"
-                  onClick={() => onResumeCase && onResumeCase(c.case_id)}
-                  disabled={!onResumeCase}
-                  id={`btn-resume-${c.case_id}`}
-                  title={`Resume case ${c.case_id}`}
-                >
-                  Resume
-                </button>
+                <div className="case-history-actions">
+                  <button
+                    type="button"
+                    className="btn-resume-case"
+                    onClick={() => onResumeCase && onResumeCase(c.case_id)}
+                    disabled={!onResumeCase || deletingCaseId === c.case_id}
+                    id={`btn-resume-${c.case_id}`}
+                    title={`Resume case ${c.case_id}`}
+                  >
+                    Resume
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-delete-case"
+                    onClick={() => handleDeleteCaseClick(c)}
+                    disabled={!onDeleteCase || deletingCaseId === c.case_id}
+                    id={`btn-delete-${c.case_id}`}
+                    title={`Delete case ${c.case_id}`}
+                    aria-label={`Delete case ${c.filename || c.case_id}`}
+                  >
+                    {deletingCaseId === c.case_id ? '…' : '🗑️'}
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

@@ -23,6 +23,7 @@ import {
   getPlanningMeasurements,
   createPointToPointMeasurement,
   deletePlanningMeasurement,
+  deleteCase,
 } from './api';
 import './index.css';
 
@@ -318,6 +319,15 @@ function App() {
     },
     [startPolling]
   );
+
+  // ── Delete a case from history (Day 28) ─────────────────────────────────────
+  // Thin wrapper around the existing deleteCase() API helper. Confirmation
+  // and case-list refresh are owned by UploadPanel (which already owns the
+  // case-list state); this never touches the currently-active case's state,
+  // since UploadPanel is only ever shown while appState === 'initial'.
+  const handleDeleteCase = useCallback(async (targetCaseId) => {
+    await deleteCase(targetCaseId);
+  }, []);
 
   // ── Reset to initial state ─────────────────────────────────────────────────
   const handleReset = useCallback(() => {
@@ -735,6 +745,7 @@ function App() {
             isUploading={isUploading}
             uploadError={uploadError}
             onResumeCase={handleResumeCase}
+            onDeleteCase={handleDeleteCase}
           />
         </main>
       )}

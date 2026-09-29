@@ -90,6 +90,18 @@ export async function getCaseList() {
 }
 
 /**
+ * Permanently delete a case and all of its associated data (Day 28).
+ * Destructive and irreversible — the caller (UI) is responsible for
+ * confirming with the user before calling this.
+ *
+ * @param {string} caseId - The UUID of the case to delete.
+ * @returns {Promise<{ status: string, case_id: string }>}
+ */
+export async function deleteCase(caseId) {
+  return apiFetch(`/cases/${caseId}`, { method: 'DELETE' });
+}
+
+/**
  * Retrieve structured measurement results for a completed case.
  * Only valid when status === 'completed'.
  *

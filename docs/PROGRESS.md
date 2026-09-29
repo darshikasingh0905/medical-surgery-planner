@@ -1,9 +1,9 @@
 # Project Progress Report: AI-Assisted Preoperative Planning System
 
-**Document Version:** 1.14  
-**Last Updated:** September 2026 (Day 27 Completed)  
+**Document Version:** 1.15  
+**Last Updated:** September 2026 (Day 28 Completed)  
 **Target Repository:** `medical-surgery-planner`  
-**Current Status:** Preoperative Planning Workspace Active | Case History & Resume | Full-Stack Workstation Dashboard | Synchronized 3D + MPR Viewport | Preoperative Report PDF with Embedded CT Slice Imagery | Interactive Preoperative Report (click-to-focus) | Workspace Organ/Lesion Opacity & Lesion Visibility Controls | Advanced Planning Measurements (Target↔Target, Target↔Structure, Structure↔Structure) | Planning Annotation Editing & Lesion→Annotation Integration | Complete MPR + Visualization Session Persistence | Coordinate System Audit Hardened | Deterministic Procedure Explanation Engine | Vite Build Clean (0 errors)
+**Current Status:** Preoperative Planning Workspace Active | Case History, Resume & Deletion | Full-Stack Workstation Dashboard | Synchronized 3D + MPR Viewport | Preoperative Report PDF with Embedded CT Slice Imagery | Interactive Preoperative Report (click-to-focus) | Workspace Organ/Lesion Opacity & Lesion Visibility Controls | Advanced Planning Measurements (Target↔Target, Target↔Structure, Structure↔Structure) | Planning Annotation Editing & Lesion→Annotation Integration | Complete MPR + Visualization Session Persistence | Coordinate System Audit Hardened | Deterministic Procedure Explanation Engine | Vite Build Clean (0 errors)
 
 
 ---
@@ -37,14 +37,14 @@ The system emphasizes **clinical safety, deterministic reproducibility, and stri
 | **Lesion REST API Endpoints** | **Completed** | FastAPI | `GET /lesions`, `GET /lesions/{id}` with cached + dynamic metrics |
 | **Multi-Planar Reconstruction (MPR)** | **Completed** | NumPy, Pillow, FastAPI | Sub-millisecond Axial/Coronal/Sagittal streaming, HU windowing, synchronized crosshairs |
 | **Planning Markers & Annotation Layer**| **Completed** | FastAPI, React, Three.js | Unified target model, atomic JSON persistence, 2D/3D synchronized markers, click-to-annotate UX |
-| **Automated Verification Suite** | **Active (100% Pass)** | `pytest` (286 tests) | 286 passed, 0 skipped, 0 failed |
+| **Automated Verification Suite** | **Active (100% Pass)** | `pytest` (293 tests) | 293 passed, 0 skipped, 0 failed |
 | **Preoperative Report & PDF Export** | **Completed** | Pydantic, ReportLab, React | 15-section JSON report + A4 PDF, technical/general audiences |
 | **Advanced Planning Measurements** | **Completed** | FastAPI, React | Target↔Target, Target↔Structure, Structure↔Structure UI |
 | **Planning Annotation Editing & Lesion→Annotation** | **Completed** | FastAPI, React | Edit label/notes on user annotations; create annotation from a model finding |
 | **Interactive Preoperative Report** | **Completed** | React | Click-to-focus on findings/anatomy/relationships/targets/measurements |
 | **Workspace Visualization Controls** | **Completed** | React, FastAPI | Organ/lesion opacity sliders, per-lesion visibility toggle, session-persisted |
 | **Preoperative Report Imaging** | **Completed** | ReportLab, `mpr_manager` | 3 embedded CT slice views (axial/coronal/sagittal) in the PDF report |
-| **Case History / Resume** | **Completed** | FastAPI, React | `GET /api/cases` read-only listing; resume reuses existing `startPolling()` |
+| **Case History / Resume / Deletion** | **Completed** | FastAPI, React | `GET /api/cases` read-only listing; resume reuses existing `startPolling()`; `DELETE /api/cases/{id}` permanently removes a case's directory |
 | **Preoperative Report Imaging** | **Completed** | ReportLab, `mpr_manager` | 3 embedded CT slice views (axial/coronal/sagittal) in the PDF report |
 
 ---
@@ -592,7 +592,35 @@ python -m pytest tests/ -v
 
 ---
 
-## 18. Active Blockers & Next Steps
+## 18. Day 28 Milestone: Case Deletion
+
+- **Problem**: Day 27 gave users a way to *see* every case on disk, including
+  failed or orphaned entries, but no way to remove any of them — explicitly
+  flagged as the next step in Day 27's own Future Directions list.
+- **Backend**: `delete_case(case_id)` added to
+  `src/api/utils/case_manager.py` — resolves the case's directory via the
+  existing `get_case_path()` and removes it with `shutil.rmtree`; returns
+  `False` for a nonexistent case rather than raising. New route
+  `DELETE /api/cases/{case_id}` in `src/api/routes/cases.py`, returning
+  `{"status": "deleted", "case_id": ...}` on success (matching the existing
+  `delete_user_annotation`/`delete_measurement` response shape) or `404` if
+  not found.
+- **Frontend**: `deleteCase(caseId)` in `api.js`; `UploadPanel.jsx`'s
+  case-history rows gained a 🗑️ delete button next to the existing Resume
+  button, gated by a `window.confirm()` dialog naming the case's own
+  filename; `App.jsx` gained a thin `handleDeleteCase()` wrapper with no new
+  global state — deletion state (`deletingCaseId`, `deleteError`) lives
+  entirely in `UploadPanel`, which already owned the case-list state.
+- **No new persistence layer**: deletion is a direct filesystem operation;
+  `GET /api/cases` already re-scans the directory live, so no cache/index
+  invalidation was needed.
+- **Quality Assurance**: see `docs/DAY28.md` for exact test counts, real-case
+  validation, and governance audit results.
+- **Documentation**: [`docs/DAY28.md`](DAY28.md) — full milestone report.
+
+---
+
+## 19. Active Blockers & Next Steps
 
 ### Active Blockers:
 * **None**
@@ -609,12 +637,13 @@ python -m pytest tests/ -v
 6. Reduce duplicated select/focus/opacity logic between `App.jsx` (Standard
    View) and `PlanningWorkspace.jsx` (Workspace View) — a pre-existing
    architectural note, growing slightly with each added control
-7. Case deletion/cleanup and pagination for the case-history list (deferred
-   from Day 27 — see `docs/DAY27.md` limitations)
+7. Pagination for the case-history list (case deletion itself shipped Day 28
+   — see `docs/DAY28.md` limitations; no undo/trash mechanism, no bulk
+   delete, no audit log)
 
 ---
 
-## 19. Medical Safety & Clinical Governance
+## 20. Medical Safety & Clinical Governance
 
 * **Investigational Use Only**: This software is an engineering prototype designed for research and educational preoperative planning. It is not FDA/CE cleared as a primary diagnostic device.
 * **Human-in-the-Loop Review**: All segmentations, 3D meshes, and quantitative measurements must be verified by a board-certified radiologist or surgical specialist before any operative procedure.
